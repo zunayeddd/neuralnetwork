@@ -9,12 +9,15 @@
   const IMAGE_SIZE = 28 * 28;
   const NUM_CLASSES = 10;
 
+  /** Parse full CSV text → tensors {xs, ys} */
   function parseCsvTextToTensors(text) {
     const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
     const N = lines.length;
     if (N === 0) throw new Error('CSV appears empty after filtering blank lines.');
+
     const px = new Float32Array(N * IMAGE_SIZE);
     const labels = new Int32Array(N);
+
     let p = 0;
     for (let i = 0; i < N; i++) {
       const parts = lines[i].split(/[,;\s]+/).filter(x => x !== '');
@@ -28,14 +31,16 @@
       labels[i] = lbl;
       for (let j = 0; j < IMAGE_SIZE; j++, p++) {
         const v = Number(parts[1 + j]);
-        px[p] = Number.isFinite(v) ? (v / 255) : 0;
+        px[p] = Number.isFinite(v) ? (v / 255) : 0; // normalize to [0,1]
       }
     }
+
     const xs = tf.tensor4d(px, [N, 28, 28, 1], 'float32');
     const ys = tf.tidy(() => tf.oneHot(tf.tensor1d(labels, 'int32'), NUM_CLASSES).toFloat());
     return { xs, ys };
   }
 
+  /** Read File as text */
   function readFileAsText(file) {
     return new Promise((resolve, reject) => {
       const fr = new FileReader();
@@ -57,6 +62,7 @@
     return parseCsvTextToTensors(text);
   }
 
+  /** Split train into train/val (random shuffle) */
   function splitTrainVal(xs, ys, valRatio = 0.1) {
     const N = xs.shape[0];
     const idx = Array.from({ length: N }, (_, i) => i);
@@ -68,6 +74,7 @@
       const k = indices.length;
       const xsBuf = new Float32Array(k * IMAGE_SIZE);
       const ysBuf = new Float32Array(k * 10);
+
       const xsData = sourceXs.dataSync();
       const ysData = sourceYs.dataSync();
       let px = 0, py = 0;
@@ -89,16 +96,18 @@
     return { trainXs, trainYs, valXs, valYs };
   }
 
+  /** Add Gaussian noise (new tensor, clipped [0,1]) */
   function addGaussianNoise(xs, std = 0.1) {
     return tf.tidy(() => xs.add(tf.randomNormal(xs.shape, 0, std, 'float32')).clipByValue(0, 1));
   }
 
+  /** Full noisy copy helper */
   function makeNoisyCopy(xs, std = 0.1) {
     return addGaussianNoise(xs, std);
   }
 
+  /** Random test batch (optional noise for classifier preview) */
   function getRandomTestBatch(xs, ys, k = 5, noiseStd = null) {
-    const IMAGE_SIZE_FLAT = 28 * 28;
     const N = xs.shape[0];
     const sel = new Set();
     while (sel.size < Math.min(k, N)) sel.add(Math.floor(Math.random() * N));
@@ -106,11 +115,11 @@
     return tf.tidy(() => {
       const xsData = xs.dataSync();
       const ysData = ys.dataSync();
-      const xsBuf = new Float32Array(indices.length * IMAGE_SIZE_FLAT);
+      const xsBuf = new Float32Array(indices.length * IMAGE_SIZE);
       const ysBuf = new Float32Array(indices.length * 10);
       let px = 0, py = 0;
       for (const id of indices) {
-        xsBuf.set(xsData.subarray(id * IMAGE_SIZE_FLAT, (id + 1) * IMAGE_SIZE_FLAT), px); px += IMAGE_SIZE_FLAT;
+        xsBuf.set(xsData.subarray(id * IMAGE_SIZE, (id + 1) * IMAGE_SIZE), px); px += IMAGE_SIZE;
         ysBuf.set(ysData.subarray(id * 10, (id + 1) * 10), py); py += 10;
       }
       let batchXs = tf.tensor4d(xsBuf, [indices.length, 28, 28, 1], 'float32');
@@ -124,8 +133,8 @@
     });
   }
 
+  /** Paired noisy/clean batch for denoising previews/eval */
   function getRandomNoisyCleanPairBatch(xs, ys, k = 5, noiseStd = 0.3) {
-    const IMAGE_SIZE_FLAT = 28 * 28;
     const N = xs.shape[0];
     const sel = new Set();
     while (sel.size < Math.min(k, N)) sel.add(Math.floor(Math.random() * N));
@@ -133,11 +142,11 @@
     return tf.tidy(() => {
       const xsData = xs.dataSync();
       const ysData = ys.dataSync();
-      const cleanBuf = new Float32Array(indices.length * IMAGE_SIZE_FLAT);
+      const cleanBuf = new Float32Array(indices.length * IMAGE_SIZE);
       const ysBuf = new Float32Array(indices.length * 10);
       let px = 0, py = 0;
       for (const id of indices) {
-        cleanBuf.set(xsData.subarray(id * IMAGE_SIZE_FLAT, (id + 1) * IMAGE_SIZE_FLAT), px); px += IMAGE_SIZE_FLAT;
+        cleanBuf.set(xsData.subarray(id * IMAGE_SIZE, (id + 1) * IMAGE_SIZE), px); px += IMAGE_SIZE;
         ysBuf.set(ysData.subarray(id * 10, (id + 1) * 10), py); py += 10;
       }
       const cleanXs = tf.tensor4d(cleanBuf, [indices.length, 28, 28, 1], 'float32');
@@ -147,6 +156,7 @@
     });
   }
 
+  /** Draw a [28,28,1] tensor to a canvas at scale */
   async function draw28x28ToCanvas(tensor, canvas, scale = 4) {
     canvas.width = 28;
     canvas.height = 28;
@@ -157,7 +167,7 @@
     canvas.style.height = `${28 * scale}px`;
   }
 
-  // Explicitly attach to window to avoid "DL is not defined"
+  // Attach globally so app.js can access without race issues
   window.DL = {
     loadTrainFromFiles,
     loadTestFromFiles,
