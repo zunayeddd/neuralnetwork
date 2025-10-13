@@ -34,8 +34,8 @@
     .status { font-variant-numeric: tabular-nums }
     #previewRow { display:grid; grid-template-columns: repeat(5, auto); gap:12px; align-items:start; justify-content:flex-start }
     .thumb { display:grid; justify-items:center; gap:6px }
-    .pair { display:grid; gap:6px }
-    canvas.preview { image-rendering: pixelated; border-radius:10px; border:1px solid var(--border); background:#0a0f25; width:112px; height:112px }
+    .pair { display:grid; gap:6px } /* stack noisy + denoised */
+    canvas.preview { image-rendering: pixelated; border-radius:10px; border:1px solid var(--border); background:#0a0f25; width:112px; height:112px } /* 28*4 */
     .pred { font-weight:700; padding:4px 8px; border-radius:999px; border:1px solid var(--border) }
     .pred.good { color:#064; border-color:#194 }
     .pred.bad { color:#600; border-color:#944 }
@@ -49,6 +49,7 @@
     <div class="muted small">Upload <b>mnist_train.csv</b> and <b>mnist_test.csv</b> (label, 784 pixels, no header). No network fetch. Trains and runs fully client-side.</div>
 
     <div class="grid" style="margin-top:14px">
+      <!-- LEFT: Controls -->
       <div class="card">
         <div class="hd">Controls</div>
         <div class="bd stack">
@@ -93,6 +94,7 @@
         </div>
       </div>
 
+      <!-- RIGHT: Status / Logs -->
       <div class="card">
         <div class="hd">Data Status</div>
         <div class="bd">
@@ -132,8 +134,8 @@
     </div>
   </div>
 
-  <!-- IMPORTANT: load data-loader.js BEFORE app.js -->
-  <script src="data-loader.js"></script>
-  <script src="app.js"></script>
+  <!-- IMPORTANT: Keep this order. Use 'defer' so both scripts run after parsing, preserving order. -->
+  <script defer src="data-loader.js"></script>
+  <script defer src="app.js"></script>
 </body>
 </html>
