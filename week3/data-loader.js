@@ -1,4 +1,3 @@
-
 // data-loader.js (drop-in)
 (function(){
   function splitSmart(line){
