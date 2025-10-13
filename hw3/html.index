@@ -59,10 +59,10 @@
               <label>Upload Test CSV <input id="testCsv" type="file" accept=".csv,text/csv" /></label>
             </div>
             <div class="row">
-              <button id="btnLoad" class="primary">Load Data</button>
-              <button id="btnTrain" disabled>Train</button>
-              <button id="btnEval" disabled>Evaluate</button>
-              <button id="btnTest5" disabled>Test 5 Random</button>
+              <button id="btnLoad" class="primary" type="button">Load Data</button>
+              <button id="btnTrain" type="button" disabled>Train</button>
+              <button id="btnEval" type="button" disabled>Evaluate</button>
+              <button id="btnTest5" type="button" disabled>Test 5 Random</button>
             </div>
           </div>
 
@@ -79,11 +79,11 @@
 
           <div class="stack">
             <div class="row">
-              <button id="btnSave" disabled>Save Model (Download)</button>
-              <button id="btnLoadModel">Load Model (From Files)</button>
-              <button id="btnVerify" disabled>Verify Loaded (Compare)</button>
-              <button id="btnReset">Reset</button>
-              <button id="btnVisor">Toggle Visor</button>
+              <button id="btnSave" type="button" disabled>Save Model (Download)</button>
+              <button id="btnLoadModel" type="button">Load Model (From Files)</button>
+              <button id="btnVerify" type="button" disabled>Verify Loaded (Compare)</button>
+              <button id="btnReset" type="button">Reset</button>
+              <button id="btnVisor" type="button">Toggle Visor</button>
             </div>
             <div class="row">
               <label>model.json <input id="mdlJson" type="file" accept=".json,application/json" /></label>
@@ -135,7 +135,7 @@
   </div>
 
   <!-- App scripts (defer) -->
-  <script defer src="./data-loader.js"></script>
-  <script defer src="./app.js"></script>
+  <script defer src="data-loader.js"></script>
+  <script defer src="app.js"></script>
 </body>
 </html>
