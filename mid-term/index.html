@@ -112,6 +112,13 @@
 <script src="data-loader.js" defer></script>
 <script src="gru.js" defer></script>
 <script src="app.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis@latest" defer></script>
 
+<!-- Order matters: data-loader.js must run before app.js uses DL -->
+<script src="data-loader.js" defer></script>
+<script src="gru.js" defer></script>
+<script src="app.js" defer></script>
+  
 </body>
 </html>
