@@ -317,4 +317,17 @@
   }
 
   window.addEventListener('DOMContentLoaded', wire);
+
+  // --- Add at very top of app.js ---
+(function waitForDeps() {
+  if (window.DL && window.ModelFactory && window.tf) {
+    // Deps ready — now run your app bootstrap safely
+    if (typeof window.__APP_WIRED__ === 'function') {
+      window.__APP_WIRED__();
+    }
+  } else {
+    setTimeout(waitForDeps, 50);
+  }
+})();
+
 })();
