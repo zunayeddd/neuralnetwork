@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Credit Risk GRU — TensorFlow.js (Browser-only)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis@latest"></script>
+  <style>
+    :root { --bg:#0b1020; --panel:#121933; --ink:#eaf0ff; --muted:#a7b0d7; --border:#223162; --accent:#4ea1ff; }
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+    h1{margin:0 0 6px;font-size:22px}
+    .muted{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+    .card{background:linear-gradient(180deg,#111833,#0d142b);border:1px solid var(--border);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.25) inset}
+    .card .hd{padding:12px 14px;border-bottom:1px solid var(--border);font-weight:700}
+    .card .bd{padding:14px}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    label.pill{display:flex;align-items:center;gap:8px;background:#0f1737;border:1px solid var(--border);padding:8px 10px;border-radius:12px}
+    input[type="file"]{color:var(--ink)}
+    button{appearance:none;background:#162756;border:1px solid var(--border);color:var(--ink);padding:9px 12px;border-radius:10px;font-weight:700;cursor:pointer}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    .tbl{border-collapse:collapse;width:100%;font-size:12px}
+    .tbl th,.tbl td{border:1px solid var(--border);padding:6px 8px}
+    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+    .small{font-size:12px}
+    canvas{background:#0a0f25;border:1px solid var(--border);border-radius:8px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Credit Risk (GRU) — Browser-only TensorFlow.js</h1>
+    <div class="muted small">Upload <b>credit_risk_dataset.csv</b>. All processing, training, and inference runs locally in your browser.</div>
+
+    <div class="grid" style="margin-top:12px">
+      <div class="card">
+        <div class="hd">Controls</div>
+        <div class="bd">
+          <div class="row" style="margin-bottom:8px">
+            <label class="pill">Upload CSV <input id="csvFile" type="file" accept=".csv,text/csv" /></label>
+          </div>
+          <div class="row" style="margin-bottom:8px">
+            <button id="btnLoad" type="button">Load Data</button>
+            <button id="btnTrain" type="button">Train</button>
+            <button id="btnEval" type="button">Evaluate</button>
+            <button id="btnPredict" type="button">Predict & Export</button>
+          </div>
+          <div class="row" style="margin-bottom:8px">
+            <button id="btnSave" type="button">Save Model</button>
+            <button id="btnLoadModel" type="button">Load Model</button>
+            <button id="btnReset" type="button">Reset</button>
+            <button type="button" onclick="tfvis.visor().toggle()">Toggle Visor</button>
+          </div>
+          <div class="row">
+            <label class="pill">model.json <input id="mdlJson" type="file" accept=".json,application/json" /></label>
+            <label class="pill">weights.bin <input id="mdlBin" type="file" accept=".bin,application/octet-stream" /></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd">Status</div>
+        <div class="bd">
+          <div id="status">Waiting for CSV…</div>
+          <div id="shape" class="small muted" style="margin-top:6px">–</div>
+          <div id="missing" class="small" style="margin-top:6px">–</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:12px">
+      <div class="card">
+        <div class="hd">Preview</div>
+        <div class="bd"><div id="preview"></div></div>
+      </div>
+      <div class="card">
+        <div class="hd">Metrics</div>
+        <div class="bd">
+          <div class="row" style="gap:10px;align-items:center">
+            <label class="pill">Threshold
+              <input id="thr" type="range" min="0" max="1" step="0.01" value="0.35" style="width:160px;margin-left:8px" />
+              <span id="thrVal" style="margin-left:6px">0.35</span>
+            </label>
+            <div id="rocAuc" class="small">AUC: –</div>
+          </div>
+          <div id="metrics" style="margin-top:8px"></div>
+          <div style="margin-top:8px">
+            <canvas id="rocCanvas" width="320" height="240"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="hd">Logs</div>
+      <div class="bd"><pre id="logs" class="small" style="white-space:pre-wrap;word-break:break-word;margin:0">–</pre></div>
+    </div>
+  </div>
+
+  <script src="data-loader.js" defer></script>
+  <script src="gru.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
