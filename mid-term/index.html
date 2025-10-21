@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Credit Risk GRU — TensorFlow.js (Browser-only)</title>
+  <title>Credit Risk (GRU) — TensorFlow.js (Browser-only)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Core libs -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis@latest"></script>
   <style>
-    :root { --bg:#0b1020; --panel:#121933; --ink:#eaf0ff; --muted:#a7b0d7; --border:#223162; --accent:#4ea1ff; }
+    :root { --bg:#0b1020; --panel:#121933; --ink:#eaf0ff; --muted:#a7b0d7; --border:#223162; }
     html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
     .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
     h1{margin:0 0 6px;font-size:22px}
@@ -31,7 +32,7 @@
 <body>
   <div class="wrap">
     <h1>Credit Risk (GRU) — Browser-only TensorFlow.js</h1>
-    <div class="muted small">Upload <b>credit_risk_dataset.csv</b>. All processing, training, and inference runs locally in your browser.</div>
+    <div class="muted small">Upload <b>credit_risk_dataset.csv</b>. All processing, training, and inference runs locally.</div>
 
     <div class="grid" style="margin-top:12px">
       <div class="card">
@@ -98,6 +99,7 @@
     </div>
   </div>
 
+  <!-- App scripts -->
   <script src="data-loader.js" defer></script>
   <script src="gru.js" defer></script>
   <script src="app.js" defer></script>
