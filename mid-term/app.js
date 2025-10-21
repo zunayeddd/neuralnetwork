@@ -1,341 +1,397 @@
 // app.js
-// UI wiring for credit risk GRU classifier in the browser (TensorFlow.js + tfjs-vis).
-// - Load CSV, EDA preview, preprocessing fit/transform.
-// - Train GRU (sequence length = 1 over tabular features), live charts.
-// - Evaluate: ROC curve, AUC, threshold slider → confusion/precision/recall/F1.
-// - Predict/export: probabilities.csv and submission.csv (thresholded).
-// - Save/Load model via files (no IndexedDB). All local, no network.
+// UI, model training, evaluation, and prediction for Loan Approval Predictor
 
-(() => {
-  // State
-  let prep = null;
-  let schema = null;
-  let train = null, val = null;
-  let model = null;
-  let threshold = 0.35;
-  let featureDim = 0;
+let model = null;
+let preprocessor = null;
+let trainData = null;
+let testData = null;
+let trainHeaders = null;
+let testHeaders = null;
+let valXs = null, valYs = null;
 
-    // --- Add at very top of app.js ---
-(function waitForDeps() {
-  if (window.DL && window.ModelFactory && window.tf) {
-    // Deps ready — now run your app bootstrap safely
-    if (typeof window.__APP_WIRED__ === 'function') {
-      window.__APP_WIRED__();
-    }
-  } else {
-    setTimeout(waitForDeps, 50);
-  }
-})();
+// Initialize UI event listeners
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('load-data').addEventListener('click', loadData);
+  document.getElementById('train-model').addEventListener('click', trainModel);
+  document.getElementById('predict-test').addEventListener('click', predictTest);
+  document.getElementById('save-model').addEventListener('click', saveModel);
+  document.getElementById('save-prep').addEventListener('click', savePreprocessor);
+  document.getElementById('load-model').addEventListener('click', loadModel);
+  document.getElementById('reset').addEventListener('click', reset);
+  document.getElementById('threshold').addEventListener('input', updateMetrics);
+  document.getElementById('toggle-visor').addEventListener('click', () => tfvis.visor().toggle());
+});
 
-
-  // DOM helpers
-  const $ = (id) => document.getElementById(id);
-  const setStatus = (msg) => { const el = $('status'); if (el) el.textContent = msg; };
-  const log = (msg) => { const el = $('logs'); if (!el) return; el.textContent = (el.textContent ? el.textContent + '\n' : '') + msg; };
-
-  function clearAll() {
-    if (model) { model.dispose(); model = null; }
-    if (train) { train.xs?.dispose?.(); train.ys?.dispose?.(); train = null; }
-    if (val) { val.xs?.dispose?.(); val.ys?.dispose?.(); val = null; }
-    prep = null; schema = null; featureDim = 0;
-    $('preview').innerHTML = '';
-    $('metrics').innerHTML = '';
-    $('rocAuc').textContent = 'AUC: –';
-    $('thrVal').textContent = threshold.toFixed(2);
-    $('logs').textContent = '';
-    setStatus('Reset.');
-  }
-
-  // CSV preview table
-  function renderPreviewTable(rows, containerId, maxRows=12) {
-    const el = $(containerId);
-    if (!el) return;
-    el.innerHTML = '';
-    if (!rows || rows.length === 0) { el.textContent = 'No rows.'; return; }
-    const header = Object.keys(rows[0]);
-    const table = document.createElement('table'); table.className = 'tbl';
-    const thead = document.createElement('thead'); const trh = document.createElement('tr');
-    for (const h of header) { const th = document.createElement('th'); th.textContent = h; trh.appendChild(th); }
-    thead.appendChild(trh); table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    for (let i = 0; i < Math.min(maxRows, rows.length); i++) {
-      const tr = document.createElement('tr');
-      for (const h of header) { const td = document.createElement('td'); td.textContent = rows[i][h]; tr.appendChild(td); }
-      tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
-    el.appendChild(table);
-  }
-
-  function computeMissingPerc(rows) {
-    const totals = {};
-    const miss = {};
-    if (!rows || rows.length === 0) return { missing: {}, ratios: {} };
-    const header = Object.keys(rows[0]);
-    for (const h of header) { totals[h] = 0; miss[h] = 0; }
-    for (const r of rows) {
-      for (const h of header) {
-        totals[h] += 1;
-        const v = r[h];
-        if (v == null || v === '') miss[h] += 1;
-      }
-    }
-    const ratios = {};
-    for (const h of header) ratios[h] = totals[h] ? (miss[h] / totals[h]) : 0;
-    return { missing: miss, ratios };
-  }
-
-  function makeConfusion(yTrue, yScore, thr) {
-    let TP=0, FP=0, TN=0, FN=0;
-    for (let i = 0; i < yTrue.length; i++) {
-      const p = yScore[i] >= thr ? 1 : 0;
-      const t = yTrue[i] >= 0.5 ? 1 : 0;
-      if (p===1 && t===1) TP++; else if (p===1 && t===0) FP++; else if (p===0 && t===1) FN++; else TN++;
-    }
-    const prec = (TP+FP) ? TP/(TP+FP) : 0;
-    const rec  = (TP+FN) ? TP/(TP+FN) : 0;
-    const f1   = (prec+rec) ? 2*prec*rec/(prec+rec) : 0;
-    return { TP, FP, TN, FN, prec, rec, f1 };
-  }
-
-  function computeROC(yTrue, yScore) {
-    // Basic ROC by sorting scores and sweeping thresholds
-    const pairs = yScore.map((s,i)=>[s, yTrue[i]]);
-    pairs.sort((a,b)=>b[0]-a[0]); // desc
-    let P = 0, N = 0; for (const [,y] of pairs) (y>=0.5?P++:N++);
-    let TP=0, FP=0;
-    const roc = [[0,0]];
-    let auc = 0, prevFPR=0, prevTPR=0;
-    for (let i = 0; i < pairs.length; i++) {
-      const y = pairs[i][1] >= 0.5 ? 1:0;
-      if (y===1) TP++; else FP++;
-      const TPR = P ? TP/P : 0;
-      const FPR = N ? FP/N : 0;
-      roc.push([FPR, TPR]);
-      // Trapezoid area
-      auc += (FPR - prevFPR) * (TPR + prevTPR) / 2;
-      prevFPR = FPR; prevTPR = TPR;
-    }
-    return { roc, auc: Math.max(0, Math.min(1, auc)) };
-  }
-
-  function renderMetrics(conf) {
-    const el = $('metrics'); if (!el) return;
-    el.innerHTML = `
-      <div class="grid3">
-        <div><b>TP</b>: ${conf.TP}</div>
-        <div><b>FP</b>: ${conf.FP}</div>
-        <div><b>TN</b>: ${conf.TN}</div>
-        <div><b>FN</b>: ${conf.FN}</div>
-      </div>
-      <div class="grid3">
-        <div><b>Precision</b>: ${(conf.prec*100).toFixed(2)}%</div>
-        <div><b>Recall</b>: ${(conf.rec*100).toFixed(2)}%</div>
-        <div><b>F1</b>: ${conf.f1.toFixed(3)}</div>
-      </div>`;
-  }
-
-  async function onLoadCSV() {
+// Load and preprocess data
+async function loadData() {
+  tf.tidy(() => {
     try {
-      setStatus('Reading CSV…');
-      const file = $('csvFile').files?.[0];
-      if (!file) { alert('Choose credit_risk_dataset.csv first.'); return; }
-      const text = await file.text();
-      const { header, rows } = DL.parseCSV(text);
-      schema = DL.inferColumnTypes(header, rows);
-      renderPreviewTable(rows, 'preview', 12);
-      const miss = computeMissingPerc(rows);
-      const missList = Object.entries(miss.ratios).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>`${k}: ${(v*100).toFixed(1)}%`).join('  ·  ');
-      $('missing').textContent = missList || 'No missing values detected.';
-      const split = DL.stratifiedSplit(rows, schema.target, 0.2);
-      prep = DL.fitPreprocess(split.train, schema);
-      train = DL.transform(split.train, prep);
-      val = DL.transform(split.val, prep);
-      featureDim = train.D;
-      $('shape').textContent = `Train: ${train.N} × ${train.D} • Val: ${val.N} × ${val.D}`;
-      setStatus('Data ready. You can Train now.');
-      $('btnTrain').disabled = false;
-      $('btnEval').disabled = true;
-      $('btnPredict').disabled = true;
-      $('btnSave').disabled = true;
+      const trainFile = document.getElementById('train-file').files[0];
+      const testFile = document.getElementById('test-file').files[0];
+      if (!trainFile) throw new Error('Please upload train.csv');
+
+      const reader = new FileReader();
+      reader.onload = async e => {
+        try {
+          trainData = parseCSV(e.target.result);
+          trainHeaders = trainData[0];
+          trainData = trainData.slice(1);
+
+          if (!trainHeaders.includes('loan_status')) {
+            throw new Error('train.csv missing loan_status column');
+          }
+
+          // Engineer features if enabled
+          if (document.getElementById('engineer-features').checked) {
+            const { data, headers } = preprocessor.engineerFeatures(trainData, trainHeaders);
+            trainData = data;
+            trainHeaders = headers;
+          }
+
+          // EDA
+          const edaOutput = document.getElementById('eda-output');
+          const shape = `${trainData.length} rows, ${trainHeaders.length} columns`;
+          const targetRate = trainData.reduce((sum, row) => sum + (row[trainHeaders.indexOf('loan_status')] === '1' ? 1 : 0), 0) / trainData.length;
+          const missing = trainHeaders.map((col, idx) => {
+            const missingCount = trainData.filter(row => row[idx] === '' || row[idx] === null).length;
+            return `${col}: ${(missingCount / trainData.length * 100).toFixed(2)}%`;
+          }).join('\n');
+
+          edaOutput.textContent = `Shape: ${shape}\nTarget Rate: ${(targetRate * 100).toFixed(2)}%\nMissing Values:\n${missing}`;
+
+          // Preview table
+          const previewTable = document.getElementById('preview-table');
+          previewTable.innerHTML = '';
+          const thead = document.createElement('thead');
+          const headerRow = document.createElement('tr');
+          trainHeaders.forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+          previewTable.appendChild(thead);
+          const tbody = document.createElement('tbody');
+          trainData.slice(0, 20).forEach(row => {
+            const tr = document.createElement('tr');
+            row.forEach(cell => {
+              const td = document.createElement('td');
+              td.textContent = cell;
+              tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+          });
+          previewTable.appendChild(tbody);
+
+          // Preprocess
+          preprocessor = new Preprocessor();
+          preprocessor.fit(trainData, trainHeaders);
+          document.getElementById('feature-dim').textContent = `Feature Dimension: ${preprocessor.featureOrder.length}`;
+
+          // Split data
+          const { train, val } = stratifiedSplit(trainData, trainHeaders);
+          const trainProcessed = preprocessor.transform(train);
+          const valProcessed = preprocessor.transform(val);
+          valXs = tf.tensor2d(valProcessed.features);
+          valYs = tf.tensor1d(valProcessed.targets, 'float32');
+
+          // Load test data if provided
+          if (testFile) {
+            const testReader = new FileReader();
+            testReader.onload = e => {
+              testData = parseCSV(e.target.result);
+              testHeaders = testData[0];
+              testData = testData.slice(1);
+              if (document.getElementById('engineer-features').checked) {
+                const { data, headers } = preprocessor.engineerFeatures(testData, testHeaders);
+                testData = data;
+                testHeaders = headers;
+              }
+            };
+            testReader.readAsText(testFile);
+          }
+
+          enableButtons();
+        } catch (err) {
+          alert(`Error loading data: ${err.message}`);
+        }
+      };
+      reader.readAsText(trainFile);
     } catch (err) {
-      console.error(err);
-      alert('Load error: ' + (err.message || err));
-      setStatus('Load failed.');
+      alert(`Error: ${err.message}`);
     }
-  }
+  });
+}
 
-  async function onTrain() {
+// Create and train the model
+async function trainModel() {
+  tf.tidy(async () => {
     try {
-      if (!train || !prep) { alert('Load data first.'); return; }
-      if (model) { model.dispose(); model = null; }
-      model = ModelFactory.buildGRUModel(featureDim);
-      const xsTr = DL.reshapeToSeq1(train.xs);
-      const xsVa = DL.reshapeToSeq1(val.xs);
-      const surface = { name: 'Training', tab: 'Charts' };
-      const callbacks = tfvis.show.fitCallbacks(surface, ['loss','val_loss','acc','val_acc'], { callbacks:['onEpochEnd'] });
+      document.getElementById('train-model').disabled = true;
+      const hiddenUnits = parseInt(document.getElementById('hidden-units').value);
+      const lr = parseFloat(document.getElementById('lr').value);
 
-      setStatus('Training…');
-      const t0 = performance.now();
-      const history = await model.fit(xsTr, train.ys, {
+      // Create model
+      model = tf.sequential();
+      model.add(tf.layers.dense({
+        units: hiddenUnits,
+        activation: 'relu',
+        inputShape: [preprocessor.featureOrder.length]
+      }));
+      model.add(tf.layers.dropout({ rate: 0.2 }));
+      model.add(tf.layers.dense({
+        units: Math.floor(hiddenUnits / 2),
+        activation: 'relu'
+      }));
+      model.add(tf.layers.dense({
+        units: 1,
+        activation: 'sigmoid'
+      }));
+
+      model.compile({
+        optimizer: tf.train.adam(lr),
+        loss: 'binaryCrossentropy',
+        metrics: ['accuracy']
+      });
+
+      // Show model summary
+      const summary = [];
+      model.summary({
+        printFn: line => summary.push(line)
+      });
+      document.getElementById('model-summary').textContent = summary.join('\n');
+
+      // Prepare training data
+      const { train } = stratifiedSplit(trainData, trainHeaders);
+      const { features, targets } = preprocessor.transform(train);
+      const xs = tf.tensor2d(features);
+      const ys = tf.tensor1d(targets, 'float32');
+
+      // Train with tfjs-vis
+      const surface = { name: 'Training Metrics', tab: 'Training' };
+      const history = [];
+      await model.fit(xs, ys, {
         epochs: 50,
-        batchSize: Math.min(32, train.N),
-        validationData: [xsVa, val.ys],
+        batchSize: 32,
         shuffle: true,
+        validationData: [valXs, valYs],
         callbacks: {
-          ...callbacks,
           onEpochEnd: async (epoch, logs) => {
-            $('logs').textContent += `Epoch ${epoch+1}: loss=${logs.loss.toFixed(4)} val_loss=${logs.val_loss.toFixed(4)} acc=${(logs.acc*100).toFixed(1)}% val_acc=${(logs.val_acc*100).toFixed(1)}%\n`;
+            history.push(logs);
+            await tfvis.show.history(surface, history, ['loss', 'val_loss', 'acc', 'val_acc']);
+            document.getElementById('training-log').textContent += `Epoch ${epoch + 1}: loss=${logs.loss.toFixed(4)}, acc=${logs.acc.toFixed(4)}\n`;
             await tf.nextFrame();
+          },
+          onTrainEnd: () => {
+            document.getElementById('training-log').textContent += 'Training complete\n';
+            updateMetrics();
           }
         }
       });
-      xsTr.dispose(); xsVa.dispose();
-      const t1 = performance.now();
-      $('logs').textContent += `Finished in ${(t1-t0).toFixed(0)} ms\n`;
-      setStatus('Training complete. Evaluate to see ROC/AUC.');
-      $('btnEval').disabled = false;
-      $('btnPredict').disabled = false;
-      $('btnSave').disabled = false;
-    } catch (err) {
-      console.error(err);
-      alert('Training error: ' + (err.message || err));
-      setStatus('Training failed.');
-    }
-  }
 
-  async function onEvaluate() {
-    try {
-      if (!model || !val) { alert('Train first.'); return; }
-      setStatus('Evaluating…');
-      const xsVa = DL.reshapeToSeq1(val.xs);
-      const probsT = model.predict(xsVa);
-      const probs = Array.from(await probsT.data());
-      const labels = Array.from((await val.ys.data()));
-      xsVa.dispose(); probsT.dispose();
-      const { roc, auc } = computeROC(labels, probs);
-      $('rocAuc').textContent = `AUC: ${auc.toFixed(4)} (Val N=${labels.length})`;
-      // Draw ROC into simple canvas
-      drawROC(roc, 'rocCanvas');
-      // Confusion at current threshold
-      const conf = makeConfusion(labels, probs, threshold);
-      $('thrVal').textContent = threshold.toFixed(2);
-      renderMetrics(conf);
-      setStatus('Evaluation done.');
-      // Store for slider use
-      window.__VAL_LABELS__ = labels;
-      window.__VAL_PROBS__ = probs;
-    } catch (err) {
-      console.error(err);
-      alert('Evaluation error: ' + (err.message || err));
-      setStatus('Evaluation failed.');
-    }
-  }
-
-  function onThrChange() {
-    const inp = $('thr'); threshold = Math.max(0, Math.min(1, Number(inp.value) || 0.5));
-    $('thrVal').textContent = threshold.toFixed(2);
-    const labels = window.__VAL_LABELS__, probs = window.__VAL_PROBS__;
-    if (labels && probs) {
-      const conf = makeConfusion(labels, probs, threshold);
-      renderMetrics(conf);
-    }
-  }
-
-  function drawROC(roc, canvasId) {
-    const c = $(canvasId); const W = c.width = 320; const H = c.height = 240; const ctx = c.getContext('2d');
-    ctx.fillStyle = '#0b1020'; ctx.fillRect(0,0,W,H);
-    ctx.strokeStyle = '#243b86'; ctx.lineWidth = 1; // axes
-    ctx.beginPath(); ctx.moveTo(32, 8); ctx.lineTo(32, H-24); ctx.lineTo(W-8, H-24); ctx.stroke();
-    // diagonal
-    ctx.strokeStyle = '#555'; ctx.beginPath(); ctx.moveTo(32, H-24); ctx.lineTo(W-8, 8); ctx.stroke();
-    // ROC
-    ctx.strokeStyle = '#63b3ff'; ctx.lineWidth = 2; ctx.beginPath();
-    for (let i = 0; i < roc.length; i++) {
-      const [fpr,tpr] = roc[i];
-      const x = 32 + (W-40) * fpr;
-      const y = (H-24) - (H-32) * tpr;
-      if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    }
-    ctx.stroke();
-    ctx.fillStyle = '#cfe3ff'; ctx.font = '12px system-ui'; ctx.fillText('FPR', W-40, H-8); ctx.fillText('TPR', 4, 16);
-  }
-
-  async function onPredictExport() {
-    try {
-      if (!model || !prep) { alert('Train first.'); return; }
-      // Use validation set as a stand-in for "test" export here; if a separate test file is provided, you could add another loader.
-      const xsVa = DL.reshapeToSeq1(val.xs);
-      const probsT = model.predict(xsVa);
-      const probs = Array.from(await probsT.data());
-      xsVa.dispose(); probsT.dispose();
-      // Build CSVs (no ID col guaranteed; we output row index)
-      const linesProb = ['row,probability'];
-      const linesSub  = ['row,loan_status'];
-      for (let i = 0; i < probs.length; i++) {
-        linesProb.push(`${i},${probs[i].toFixed(6)}`);
-        const pred = probs[i] >= threshold ? 1 : 0;
-        linesSub.push(`${i},${pred}`);
+      // Early stopping simulation (manual check)
+      const patience = 5;
+      let bestValLoss = Infinity;
+      let patienceCount = 0;
+      for (let log of history) {
+        if (log.val_loss < bestValLoss) {
+          bestValLoss = log.val_loss;
+          patienceCount = 0;
+        } else {
+          patienceCount++;
+          if (patienceCount >= patience) {
+            document.getElementById('training-log').textContent += 'Early stopping triggered\n';
+            break;
+          }
+        }
       }
-      downloadText('probabilities.csv', linesProb.join('\n'));
-      downloadText('submission.csv', linesSub.join('\n'));
-      setStatus('Exported probabilities.csv and submission.csv');
+
+      xs.dispose();
+      ys.dispose();
+      document.getElementById('train-model').disabled = false;
     } catch (err) {
-      console.error(err);
-      alert('Predict/export error: ' + (err.message || err));
-      setStatus('Predict/export failed.');
+      alert(`Training error: ${err.message}`);
+      document.getElementById('train-model').disabled = false;
     }
-  }
+  });
+}
 
-  function downloadText(filename, content) {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-  }
-
-  async function onSaveModel() {
+// Update metrics and ROC curve
+async function updateMetrics() {
+  tf.tidy(() => {
     try {
-      if (!model) { alert('No model trained.'); return; }
-      await model.save('downloads://credit-risk-gru');
-      setStatus('Model saved to downloads.');
-    } catch (err) { alert('Save error: ' + (err.message||err)); }
-  }
+      if (!model || !valXs || !valYs) return;
+      const probs = model.predict(valXs).dataSync();
+      const targets = valYs.dataSync();
+      const { tpr, fpr, auc } = computeROC(probs, targets);
+      const threshold = parseFloat(document.getElementById('threshold').value);
+      document.getElementById('threshold-value').textContent = threshold.toFixed(2);
+      const { tp, fp, tn, fn, precision, recall, f1 } = computeMetrics(probs, targets, threshold);
 
-  async function onLoadModel() {
+      // Update metrics
+      document.getElementById('metrics-output').textContent = `AUC: ${auc.toFixed(4)}\nValidation Accuracy: ${(tp + tn) / (tp + tn + fp + fn).toFixed(4)}`;
+
+      // Update confusion matrix
+      document.getElementById('confusion-output').textContent = `Confusion Matrix:\nTP: ${tp}, FP: ${fp}\nFN: ${fn}, TN: ${tn}\nPrecision: ${precision.toFixed(4)}\nRecall: ${recall.toFixed(4)}\nF1: ${f1.toFixed(4)}`;
+
+      // Draw ROC curve
+      const canvas = document.getElementById('roc-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height);
+      for (let i = 0; i < fpr.length; i++) {
+        ctx.lineTo(fpr[i] * canvas.width, (1 - tpr[i]) * canvas.height);
+      }
+      ctx.strokeStyle = 'blue';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height);
+      ctx.lineTo(canvas.width, 0);
+      ctx.strokeStyle = 'gray';
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } catch (err) {
+      alert(`Metrics error: ${err.message}`);
+    }
+  });
+}
+
+// Predict on test data and export
+async function predictTest() {
+  tf.tidy(() => {
     try {
-      const jf = $('mdlJson').files?.[0];
-      const bf = $('mdlBin').files?.[0];
-      if (!jf || !bf) { alert('Select model.json and weights.bin'); return; }
-      const m = await tf.loadLayersModel(tf.io.browserFiles([jf, bf]));
+      if (!model || !testData) {
+        throw new Error('Model or test data not loaded');
+      }
+      document.getElementById('predict-test').disabled = true;
+
+      const { features, ids } = preprocessor.transform(testData, false, true);
+      const xs = tf.tensor2d(features);
+      const probs = model.predict(xs).dataSync();
+      const threshold = parseFloat(document.getElementById('threshold').value);
+      const preds = probs.map(p => p >= threshold ? 1 : 0);
+
+      // Create submission.csv
+      const submission = [['ApplicationID', 'Approved'], ...ids.map((id, i) => [id || `App${i}`, preds[i]])];
+      const submissionCSV = submission.map(row => row.join(',')).join('\n');
+      const submissionBlob = new Blob([submissionCSV], { type: 'text/csv' });
+      const submissionLink = document.getElementById('download-submission');
+      submissionLink.href = URL.createObjectURL(submissionBlob);
+      submissionLink.download = 'submission.csv';
+      submissionLink.style.display = 'block';
+
+      // Create probabilities.csv
+      const probabilities = [['ApplicationID', 'Probability'], ...ids.map((id, i) => [id || `App${i}`, probs[i].toFixed(6)])];
+      const probabilitiesCSV = probabilities.map(row => row.join(',')).join('\n');
+      const probabilitiesBlob = new Blob([probabilitiesCSV], { type: 'text/csv' });
+      const probabilitiesLink = document.getElementById('download-probabilities');
+      probabilitiesLink.href = URL.createObjectURL(probabilitiesBlob);
+      probabilitiesLink.download = 'probabilities.csv';
+      probabilitiesLink.style.display = 'block';
+
+      xs.dispose();
+      document.getElementById('predict-test').disabled = false;
+    } catch (err) {
+      alert(`Prediction error: ${err.message}`);
+      document.getElementById('predict-test').disabled = false;
+    }
+  });
+}
+
+// Save model
+async function saveModel() {
+  try {
+    if (!model) throw new Error('No model to save');
+    await model.save('downloads://loan-approval-mlp');
+  } catch (err) {
+    alert(`Save model error: ${err.message}`);
+  }
+}
+
+// Save preprocessor
+async function savePreprocessor() {
+  try {
+    if (!preprocessor) throw new Error('No preprocessor to save');
+    const json = JSON.stringify(preprocessor.toJSON());
+    const blob = new Blob([json], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'prep.json';
+    link.click();
+  } catch (err) {
+    alert(`Save preprocessor error: ${err.message}`);
+  }
+}
+
+// Load model and preprocessor
+async function loadModel() {
+  try {
+    const jsonFile = document.getElementById('model-json').files[0];
+    const binFile = document.getElementById('model-bin').files[0];
+    const prepFile = document.getElementById('prep-json').files[0];
+    if (!jsonFile || !binFile || !prepFile) {
+      throw new Error('Please upload model.json, weights.bin, and prep.json');
+    }
+
+    const prepReader = new FileReader();
+    prepReader.onload = async e => {
+      preprocessor = Preprocessor.fromJSON(JSON.parse(e.target.result));
+      document.getElementById('feature-dim').textContent = `Feature Dimension: ${preprocessor.featureOrder.length}`;
+
       if (model) model.dispose();
-      model = m;
-      setStatus('Model loaded from files.');
-      $('btnEval').disabled = false;
-      $('btnPredict').disabled = false;
-      $('btnSave').disabled = false;
-    } catch (err) { alert('Load model error: ' + (err.message||err)); }
+      model = await tf.loadLayersModel(tf.io.browserFiles([jsonFile, binFile]));
+      const summary = [];
+      model.summary({ printFn: line => summary.push(line) });
+      document.getElementById('model-summary').textContent = summary.join('\n');
+      updateMetrics();
+    };
+    prepReader.readAsText(prepFile);
+  } catch (err) {
+    alert(`Load model error: ${err.message}`);
   }
+}
 
-  function wire() {
-    $('btnLoad').addEventListener('click', onLoadCSV);
-    $('btnTrain').addEventListener('click', onTrain);
-    $('btnEval').addEventListener('click', onEvaluate);
-    $('btnPredict').addEventListener('click', onPredictExport);
-    $('btnSave').addEventListener('click', onSaveModel);
-    $('btnLoadModel').addEventListener('click', onLoadModel);
-    $('btnReset').addEventListener('click', clearAll);
-    $('thr').addEventListener('input', onThrChange);
-    $('thrVal').textContent = threshold.toFixed(2);
-    $('btnTrain').disabled = true; $('btnEval').disabled = true; $('btnPredict').disabled = true; $('btnSave').disabled = true;
-  }
+// Reset app state
+function reset() {
+  tf.tidy(() => {
+    if (model) model.dispose();
+    model = null;
+    preprocessor = null;
+    trainData = null;
+    testData = null;
+    trainHeaders = null;
+    testHeaders = null;
+    if (valXs) valXs.dispose();
+    if (valYs) valYs.dispose();
+    valXs = null;
+    valYs = null;
 
- // Replace your previous DOMContentLoaded listener with this:
-window.__APP_WIRED__ = function () {
-  // put your previous wire() body here or call wire()
-  // e.g.:
-  if (typeof wire === 'function') wire();
-};
+    document.getElementById('eda-output').textContent = '';
+    document.getElementById('preview-table').innerHTML = '';
+    document.getElementById('feature-dim').textContent = '';
+    document.getElementById('model-summary').textContent = '';
+    document.getElementById('training-log').textContent = '';
+    document.getElementById('metrics-output').textContent = '';
+    document.getElementById('confusion-output').textContent = '';
+    document.getElementById('download-submission').style.display = 'none';
+    document.getElementById('download-probabilities').style.display = 'none';
+    document.getElementById('train-file').value = '';
+    document.getElementById('test-file').value = '';
+    document.getElementById('model-json').value = '';
+    document.getElementById('model-bin').value = '';
+    document.getElementById('prep-json').value = '';
+    enableButtons();
+  });
+}
 
-
-
-})();
+// Enable/disable buttons
+function enableButtons() {
+  document.getElementById('load-data').disabled = false;
+  document.getElementById('train-model').disabled = !trainData;
+  document.getElementById('predict-test').disabled = !model || !testData;
+  document.getElementById('save-model').disabled = !model;
+  document.getElementById('save-prep').disabled = !preprocessor;
+  document.getElementById('load-model').disabled = false;
+}
