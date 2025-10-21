@@ -15,6 +15,19 @@
   let threshold = 0.35;
   let featureDim = 0;
 
+    // --- Add at very top of app.js ---
+(function waitForDeps() {
+  if (window.DL && window.ModelFactory && window.tf) {
+    // Deps ready — now run your app bootstrap safely
+    if (typeof window.__APP_WIRED__ === 'function') {
+      window.__APP_WIRED__();
+    }
+  } else {
+    setTimeout(waitForDeps, 50);
+  }
+})();
+
+
   // DOM helpers
   const $ = (id) => document.getElementById(id);
   const setStatus = (msg) => { const el = $('status'); if (el) el.textContent = msg; };
@@ -316,18 +329,13 @@
     $('btnTrain').disabled = true; $('btnEval').disabled = true; $('btnPredict').disabled = true; $('btnSave').disabled = true;
   }
 
-  window.addEventListener('DOMContentLoaded', wire);
+ // Replace your previous DOMContentLoaded listener with this:
+window.__APP_WIRED__ = function () {
+  // put your previous wire() body here or call wire()
+  // e.g.:
+  if (typeof wire === 'function') wire();
+};
 
-  // --- Add at very top of app.js ---
-(function waitForDeps() {
-  if (window.DL && window.ModelFactory && window.tf) {
-    // Deps ready — now run your app bootstrap safely
-    if (typeof window.__APP_WIRED__ === 'function') {
-      window.__APP_WIRED__();
-    }
-  } else {
-    setTimeout(waitForDeps, 50);
-  }
-})();
+
 
 })();
