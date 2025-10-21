@@ -1,4 +1,4 @@
-// app.js with additional tf.ready() in trainModel
+// app.js with removed tf.tidy around async in trainModel
 // UI, model training, evaluation, and prediction for Loan Approval Predictor
 
 let model = null;
@@ -219,82 +219,86 @@ async function trainModel() {
 
 // Update metrics and ROC curve
 async function updateMetrics() {
-  try {
-    if (!model || !valXs || !valYs) return;
-    const probs = model.predict(valXs).dataSync();
-    const targets = valYs.dataSync();
-    const { tpr, fpr, auc } = computeROC(probs, targets);
-    const threshold = parseFloat(document.getElementById('threshold').value);
-    document.getElementById('threshold-value').textContent = threshold.toFixed(2);
-    const { tp, fp, tn, fn, precision, recall, f1 } = computeMetrics(probs, targets, threshold);
+  tf.tidy(() => {
+    try {
+      if (!model || !valXs || !valYs) return;
+      const probs = model.predict(valXs).dataSync();
+      const targets = valYs.dataSync();
+      const { tpr, fpr, auc } = computeROC(probs, targets);
+      const threshold = parseFloat(document.getElementById('threshold').value);
+      document.getElementById('threshold-value').textContent = threshold.toFixed(2);
+      const { tp, fp, tn, fn, precision, recall, f1 } = computeMetrics(probs, targets, threshold);
 
-    // Update metrics
-    document.getElementById('metrics-output').textContent = `AUC: ${auc.toFixed(4)}\nValidation Accuracy: ${(tp + tn) / (tp + tn + fp + fn).toFixed(4)}`;
+      // Update metrics
+      document.getElementById('metrics-output').textContent = `AUC: ${auc.toFixed(4)}\nValidation Accuracy: ${(tp + tn) / (tp + tn + fp + fn).toFixed(4)}`;
 
-    // Update confusion matrix
-    document.getElementById('confusion-output').textContent = `Confusion Matrix:\nTP: ${tp}, FP: ${fp}\nFN: ${fn}, TN: ${tn}\nPrecision: ${precision.toFixed(4)}\nRecall: ${recall.toFixed(4)}\nF1: ${f1.toFixed(4)}`;
+      // Update confusion matrix
+      document.getElementById('confusion-output').textContent = `Confusion Matrix:\nTP: ${tp}, FP: ${fp}\nFN: ${fn}, TN: ${tn}\nPrecision: ${precision.toFixed(4)}\nRecall: ${recall.toFixed(4)}\nF1: ${f1.toFixed(4)}`;
 
-    // Draw ROC curve
-    const canvas = document.getElementById('roc-canvas');
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.beginPath();
-    ctx.moveTo(0, canvas.height);
-    for (let i = 0; i < fpr.length; i++) {
-      ctx.lineTo(fpr[i] * canvas.width, (1 - tpr[i]) * canvas.height);
+      // Draw ROC curve
+      const canvas = document.getElementById('roc-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height);
+      for (let i = 0; i < fpr.length; i++) {
+        ctx.lineTo(fpr[i] * canvas.width, (1 - tpr[i]) * canvas.height);
+      }
+      ctx.strokeStyle = 'blue';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height);
+      ctx.lineTo(canvas.width, 0);
+      ctx.strokeStyle = 'gray';
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } catch (err) {
+      alert(`Metrics error: ${err.message}`);
     }
-    ctx.strokeStyle = 'blue';
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, canvas.height);
-    ctx.lineTo(canvas.width, 0);
-    ctx.strokeStyle = 'gray';
-    ctx.setLineDash([5, 5]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  } catch (err) {
-    alert(`Metrics error: ${err.message}`);
-  }
+  });
 }
 
 // Predict on test data and export
 async function predictTest() {
-  try {
-    if (!model || !testData) {
-      throw new Error('Model or test data not loaded');
+  tf.tidy(() => {
+    try {
+      if (!model || !testData) {
+        throw new Error('Model or test data not loaded');
+      }
+      document.getElementById('predict-test').disabled = true;
+
+      const { features, ids } = preprocessor.transform(testData, false, true);
+      const xs = tf.tensor2d(features);
+      const probs = model.predict(xs).dataSync();
+      const threshold = parseFloat(document.getElementById('threshold').value);
+      const preds = probs.map(p => p >= threshold ? 1 : 0);
+
+      // Create submission.csv
+      const submission = [['ApplicationID', 'Approved'], ...ids.map((id, i) => [id || `App${i}`, preds[i]])];
+      const submissionCSV = submission.map(row => row.join(',')).join('\n');
+      const submissionBlob = new Blob([submissionCSV], { type: 'text/csv' });
+      const submissionLink = document.getElementById('download-submission');
+      submissionLink.href = URL.createObjectURL(submissionBlob);
+      submissionLink.download = 'submission.csv';
+      submissionLink.style.display = 'block';
+
+      // Create probabilities.csv
+      const probabilities = [['ApplicationID', 'Probability'], ...ids.map((id, i) => [id || `App${i}`, probs[i].toFixed(6)])];
+      const probabilitiesCSV = probabilities.map(row => row.join(',')).join('\n');
+      const probabilitiesBlob = new Blob([probabilitiesCSV], { type: 'text/csv' });
+      const probabilitiesLink = document.getElementById('download-probabilities');
+      probabilitiesLink.href = URL.createObjectURL(probabilitiesBlob);
+      probabilitiesLink.download = 'probabilities.csv';
+      probabilitiesLink.style.display = 'block';
+
+      xs.dispose();
+      document.getElementById('predict-test').disabled = false;
+    } catch (err) {
+      alert(`Prediction error: ${err.message}`);
+      document.getElementById('predict-test').disabled = false;
     }
-    document.getElementById('predict-test').disabled = true;
-
-    const { features, ids } = preprocessor.transform(testData, false, true);
-    const xs = tf.tensor2d(features);
-    const probs = model.predict(xs).dataSync();
-    const threshold = parseFloat(document.getElementById('threshold').value);
-    const preds = probs.map(p => p >= threshold ? 1 : 0);
-
-    // Create submission.csv
-    const submission = [['ApplicationID', 'Approved'], ...ids.map((id, i) => [id || `App${i}`, preds[i]])];
-    const submissionCSV = submission.map(row => row.join(',')).join('\n');
-    const submissionBlob = new Blob([submissionCSV], { type: 'text/csv' });
-    const submissionLink = document.getElementById('download-submission');
-    submissionLink.href = URL.createObjectURL(submissionBlob);
-    submissionLink.download = 'submission.csv';
-    submissionLink.style.display = 'block';
-
-    // Create probabilities.csv
-    const probabilities = [['ApplicationID', 'Probability'], ...ids.map((id, i) => [id || `App${i}`, probs[i].toFixed(6)])];
-    const probabilitiesCSV = probabilities.map(row => row.join(',')).join('\n');
-    const probabilitiesBlob = new Blob([probabilitiesCSV], { type: 'text/csv' });
-    const probabilitiesLink = document.getElementById('download-probabilities');
-    probabilitiesLink.href = URL.createObjectURL(probabilitiesBlob);
-    probabilitiesLink.download = 'probabilities.csv';
-    probabilitiesLink.style.display = 'block';
-
-    xs.dispose();
-    document.getElementById('predict-test').disabled = false;
-  } catch (err) {
-    alert(`Prediction error: ${err.message}`);
-    document.getElementById('predict-test').disabled = false;
-  }
+  });
 }
 
 // Save model
@@ -352,33 +356,35 @@ async function loadModel() {
 
 // Reset app state
 function reset() {
-  if (model) model.dispose();
-  model = null;
-  preprocessor = null;
-  trainData = null;
-  testData = null;
-  trainHeaders = null;
-  testHeaders = null;
-  if (valXs) valXs.dispose();
-  if (valYs) valYs.dispose();
-  valXs = null;
-  valYs = null;
+  tf.tidy(() => {
+    if (model) model.dispose();
+    model = null;
+    preprocessor = null;
+    trainData = null;
+    testData = null;
+    trainHeaders = null;
+    testHeaders = null;
+    if (valXs) valXs.dispose();
+    if (valYs) valYs.dispose();
+    valXs = null;
+    valYs = null;
 
-  document.getElementById('eda-output').textContent = '';
-  document.getElementById('preview-table').innerHTML = '';
-  document.getElementById('feature-dim').textContent = '';
-  document.getElementById('model-summary').textContent = '';
-  document.getElementById('training-log').textContent = '';
-  document.getElementById('metrics-output').textContent = '';
-  document.getElementById('confusion-output').textContent = '';
-  document.getElementById('download-submission').style.display = 'none';
-  document.getElementById('download-probabilities').style.display = 'none';
-  document.getElementById('train-file').value = '';
-  document.getElementById('test-file').value = '';
-  document.getElementById('model-json').value = '';
-  document.getElementById('model-bin').value = '';
-  document.getElementById('prep-json').value = '';
-  enableButtons();
+    document.getElementById('eda-output').textContent = '';
+    document.getElementById('preview-table').innerHTML = '';
+    document.getElementById('feature-dim').textContent = '';
+    document.getElementById('model-summary').textContent = '';
+    document.getElementById('training-log').textContent = '';
+    document.getElementById('metrics-output').textContent = '';
+    document.getElementById('confusion-output').textContent = '';
+    document.getElementById('download-submission').style.display = 'none';
+    document.getElementById('download-probabilities').style.display = 'none';
+    document.getElementById('train-file').value = '';
+    document.getElementById('test-file').value = '';
+    document.getElementById('model-json').value = '';
+    document.getElementById('model-bin').value = '';
+    document.getElementById('prep-json').value = '';
+    enableButtons();
+  });
 }
 
 // Enable/disable buttons
