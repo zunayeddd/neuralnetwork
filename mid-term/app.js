@@ -1,4 +1,4 @@
-// app.js
+// app.js with fix for preprocessor undefined
 // UI, model training, evaluation, and prediction for Loan Approval Predictor
 
 let model = null;
@@ -40,6 +40,9 @@ async function loadData() {
           if (!trainHeaders.includes('loan_status')) {
             throw new Error('train.csv missing loan_status column');
           }
+
+          // Create preprocessor early
+          preprocessor = new Preprocessor();
 
           // Engineer features if enabled
           if (document.getElementById('engineer-features').checked) {
@@ -83,8 +86,7 @@ async function loadData() {
           });
           previewTable.appendChild(tbody);
 
-          // Preprocess
-          preprocessor = new Preprocessor();
+          // Fit preprocessor
           preprocessor.fit(trainData, trainHeaders);
           document.getElementById('feature-dim').textContent = `Feature Dimension: ${preprocessor.featureOrder.length}`;
 
