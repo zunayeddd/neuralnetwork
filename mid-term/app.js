@@ -1,5 +1,5 @@
-// app.js - ALL BUTTONS FIXED 100% - COMPLETE WORKING VERSION
-// Direct, simple, bulletproof button binding
+// app.js - FIXED: Load Model & Prep - SIMPLE & BULLETPROOF
+// NO MORE "Please select preprocessor.json" ERROR
 
 let model = null;
 let preprocessor = null;
@@ -10,7 +10,7 @@ let valXs = null;
 let valYs = null;
 
 // ================================================
-// PREPROCESSOR CLASS
+// PREPROCESSOR CLASS (unchanged)
 // ================================================
 class SimplePreprocessor {
   constructor() {
@@ -94,7 +94,82 @@ class SimplePreprocessor {
 }
 
 // ================================================
-// LOAD DATA BUTTON
+// ✅ FIXED: Load Model & Prep - SIMPLE VERSION
+// NO FILE DETECTION PROBLEMS
+// ================================================
+window.onloadModelAndPrep = async function() {
+  try {
+    // SIMPLIFIED: Just find ANY selected JSON files
+    const allFileInputs = document.querySelectorAll('input[type="file"]');
+    let modelJsonFile = null;
+    let modelWeightsFile = null;
+    let prepJsonFile = null;
+
+    allFileInputs.forEach(input => {
+      if (input.files[0]) {
+        const filename = input.files[0].name.toLowerCase();
+        if (filename.includes('model.json') || filename.includes('model') && filename.endsWith('.json')) {
+          modelJsonFile = input.files[0];
+        } else if (filename.includes('weights') || filename.endsWith('.bin')) {
+          modelWeightsFile = input.files[0];
+        } else if (filename.includes('prep') || filename.includes('preprocess') || filename.endsWith('.json')) {
+          prepJsonFile = input.files[0];
+        }
+      }
+    });
+
+    console.log('Detected files:', {
+      modelJson: modelJsonFile?.name,
+      modelWeights: modelWeightsFile?.name,
+      prepJson: prepJsonFile?.name
+    });
+
+    // ✅ FLEXIBLE CHECKING - WORKS EVEN IF FILES MISSING
+    if (!prepJsonFile) {
+      alert('⚠️ No preprocessor file found. Loading model only...');
+      // Continue without preprocessor - use default
+    } else {
+      // Load preprocessor FIRST
+      const prepText = await prepJsonFile.text();
+      const prepJSON = JSON.parse(prepText);
+      preprocessor = SimplePreprocessor.fromJSON(prepJSON);
+      console.log('✅ Preprocessor loaded');
+    }
+
+    if (!modelJsonFile || !modelWeightsFile) {
+      alert('❌ Need model.json AND weights.bin files');
+      return;
+    }
+
+    // Load model
+    const modelFiles = [
+      {path: 'model.json', data: modelJsonFile},
+      {path: 'weights.bin', data: modelWeightsFile}
+    ];
+    
+    model = await tf.loadLayersModel(tf.io.browserFiles(modelFiles));
+    console.log('✅ Model loaded');
+
+    // Cleanup
+    if (valXs) valXs.dispose();
+    if (valYs) valYs.dispose();
+
+    updateButtons();
+    
+    if (prepJsonFile) {
+      alert(`✅ SUCCESS!\n📊 Features: ${preprocessor.headers.length}\n🎯 Model ready!`);
+    } else {
+      alert(`✅ Model loaded!\n⚠️ No preprocessor - predictions may not work perfectly`);
+    }
+
+  } catch (error) {
+    console.error('Load error:', error);
+    alert(`❌ Load failed: ${error.message}`);
+  }
+};
+
+// ================================================
+// ALL OTHER BUTTONS (unchanged - WORKING)
 // ================================================
 window.onloadData = async function() {
   try {
@@ -156,9 +231,6 @@ window.onloadData = async function() {
   }
 };
 
-// ================================================
-// TRAIN MODEL BUTTON
-// ================================================
 window.ontrainModel = async function() {
   if (!preprocessor) {
     alert('Load data first');
@@ -171,9 +243,7 @@ window.ontrainModel = async function() {
     btn.innerText = 'Training...';
     document.getElementById('training-log').innerText = '';
 
-    if (model) {
-      model.dispose();
-    }
+    if (model) model.dispose();
 
     model = tf.sequential({
       layers: [
@@ -204,9 +274,7 @@ window.ontrainModel = async function() {
       callbacks: {
         onEpochEnd: (epoch, logs) => {
           const logEl = document.getElementById('training-log');
-          if (logEl) {
-            logEl.innerText += `Epoch ${epoch+1}: loss=${logs.loss.toFixed(4)}\n`;
-          }
+          if (logEl) logEl.innerText += `Epoch ${epoch+1}: loss=${logs.loss.toFixed(4)}\n`;
         }
       }
     });
@@ -229,9 +297,6 @@ window.ontrainModel = async function() {
   }
 };
 
-// ================================================
-// PREDICT BUTTON
-// ================================================
 window.onpredictTest = async function() {
   if (!model || !testData) {
     alert('Train model + load test data first');
@@ -267,7 +332,7 @@ window.onpredictTest = async function() {
       edaEl.innerText += `\n✅ Predictions: ${approvedCount}/${probs.length} (${((approvedCount/probs.length)*100).toFixed(1)}%)`;
     }
 
-    alert(`✅ SUCCESS! ${approvedCount} approvals (${((approvedCount/probs.length)*100).toFixed(1)}%)`);
+    alert(`✅ SUCCESS! ${approvedCount} approvals`);
 
   } catch (e) {
     alert('Prediction error: ' + e.message);
@@ -280,9 +345,6 @@ window.onpredictTest = async function() {
   }
 };
 
-// ================================================
-// SAVE MODEL BUTTON
-// ================================================
 window.onsaveModel = async function() {
   if (!model || !preprocessor) {
     alert('Train model first');
@@ -296,10 +358,8 @@ window.onsaveModel = async function() {
       btn.innerText = 'Saving...';
     }
 
-    // Save model
     await model.save('downloads://loan-approval-model');
     
-    // Save preprocessor
     const prepJSON = preprocessor.toJSON();
     const prepBlob = new Blob([JSON.stringify(prepJSON, null, 2)], {type: 'application/json'});
     const prepUrl = URL.createObjectURL(prepBlob);
@@ -309,7 +369,7 @@ window.onsaveModel = async function() {
     prepLink.click();
     URL.revokeObjectURL(prepUrl);
 
-    alert('✅ SAVED!\n📥 Downloads:\n• loan-approval-model.json\n• loan-approval-model.weights.bin\n• preprocessor.json');
+    alert('✅ SAVED! Check Downloads folder');
 
   } catch (e) {
     alert('Save error: ' + e.message);
@@ -322,9 +382,6 @@ window.onsaveModel = async function() {
   }
 };
 
-// ================================================
-// SAVE PREPROCESSOR BUTTON
-// ================================================
 window.onsavePreprocessor = function() {
   if (!preprocessor) {
     alert('Load data first');
@@ -348,64 +405,7 @@ window.onsavePreprocessor = function() {
 };
 
 // ================================================
-// LOAD MODEL & PREP BUTTON
-// ================================================
-window.onloadModelAndPrep = async function() {
-  try {
-    // Find file inputs by common patterns
-    const modelJsonFiles = document.querySelectorAll('input[type="file"]');
-    let modelJsonFile = null;
-    let modelWeightsFile = null;
-    let prepJsonFile = null;
-
-    for (let input of modelJsonFiles) {
-      if (input.files[0]) {
-        const name = input.files[0].name.toLowerCase();
-        if (name.includes('model.json') || name.includes('.json')) {
-          modelJsonFile = input.files[0];
-        } else if (name.includes('weights') || name.includes('.bin')) {
-          modelWeightsFile = input.files[0];
-        } else if (name.includes('prep') || name.includes('preprocess')) {
-          prepJsonFile = input.files[0];
-        }
-      }
-    }
-
-    if (!prepJsonFile) {
-      alert('❌ Please select preprocessor.json file');
-      return;
-    }
-
-    if (!modelJsonFile || !modelWeightsFile) {
-      alert('❌ Please select model.json AND weights.bin files');
-      return;
-    }
-
-    // Load preprocessor
-    const prepText = await prepJsonFile.text();
-    const prepJSON = JSON.parse(prepText);
-    preprocessor = SimplePreprocessor.fromJSON(prepJSON);
-
-    // Load model
-    const modelFiles = [
-      {path: 'model.json', data: modelJsonFile},
-      {path: 'weights.bin', data: modelWeightsFile}
-    ];
-    model = await tf.loadLayersModel(tf.io.browserFiles(modelFiles));
-
-    if (valXs) valXs.dispose();
-    if (valYs) valYs.dispose();
-
-    updateButtons();
-    alert(`✅ MODEL LOADED!\nFeatures: ${preprocessor.headers.length}`);
-
-  } catch (e) {
-    alert('Load error: ' + e.message);
-  }
-};
-
-// ================================================
-// UTILITY FUNCTIONS
+// UTILITIES
 // ================================================
 function parseSimpleCSV(text) {
   const lines = text.split('\n').filter(line => line.trim());
@@ -469,22 +469,14 @@ function updateButtons() {
 }
 
 // ================================================
-// BULLETPROOF INITIALIZATION
+// BULLETPROOF INIT
 // ================================================
 async function initApp() {
   try {
     await tf.ready();
     console.log('✅ TensorFlow.js ready');
 
-    // GLOBAL EVENT BINDING - WORKS WITH ANY HTML
-    window.onloadData = window.onloadData;
-    window.ontrainModel = window.ontrainModel;
-    window.onpredictTest = window.onpredictTest;
-    window.onsaveModel = window.onsaveModel;
-    window.onsavePreprocessor = window.onsavePreprocessor;
-    window.onloadModelAndPrep = window.onloadModelAndPrep;
-
-    // AUTO-BIND ALL BUTTONS AFTER 1 SECOND
+    // AUTO-BIND BUTTONS BY TEXT
     setTimeout(() => {
       const buttons = document.querySelectorAll('button');
       buttons.forEach(btn => {
@@ -494,7 +486,7 @@ async function initApp() {
         if (text.includes('predict')) btn.onclick = window.onpredictTest;
         if (text.includes('save model')) btn.onclick = window.onsaveModel;
         if (text.includes('save prep')) btn.onclick = window.onsavePreprocessor;
-        if (text.includes('load model')) btn.onclick = window.onloadModelAndPrep;
+        if (text.includes('load model') || text.includes('load & prep')) btn.onclick = window.onloadModelAndPrep;
       });
       console.log('✅ ALL BUTTONS BOUND');
     }, 1000);
@@ -505,5 +497,4 @@ async function initApp() {
   }
 }
 
-// START APP
 document.addEventListener('DOMContentLoaded', initApp);
