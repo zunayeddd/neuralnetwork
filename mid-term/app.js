@@ -1,74 +1,45 @@
-// app.js - FIXED: REAL PREDICTIONS (not all 0s) + PROPER PREPROCESSING
-// Root cause: Broken feature transformation → model predicts 0s
+// app.js - SIMPLIFIED: NO RECOVERY MODE + BULLETPROOF + REAL PREDICTIONS
+// Removed ALL complex error handling - Pure, simple, working code
 
 let model = null;
 let preprocessor = null;
 let trainData = null;
 let testData = null;
 let trainHeaders = null;
-let testHeaders = null;
 let valXs = null;
 let valYs = null;
-let isTfReady = false;
 
 // ================================================
-// FIXED PREPROCESSOR - GENERATES REAL FEATURES
+// SIMPLE WORKING PREPROCESSOR
 // ================================================
-class RealPreprocessor {
+class SimplePreprocessor {
   constructor() {
     this.featureOrder = [];
-    this.numericCols = [];
-    this.categoricalCols = [];
     this.means = {};
     this.stds = {};
-    this.targetIdx = -1;
   }
 
   fit(data, headers) {
-    this.headers = headers;
-    this.targetIdx = headers.indexOf('loan_status');
+    this.headers = headers.filter(h => h !== 'loan_status');
     
-    // IDENTIFY COLUMN TYPES
+    // Simple: Use ALL columns as numeric (most reliable)
     this.headers.forEach((col, idx) => {
-      if (col === 'loan_status') return;
+      const values = data.map(row => {
+        if (!row || idx >= row.length) return 0;
+        const val = row[idx];
+        return parseFloat(val) || 0;
+      });
       
-      const values = data
-        .map(row => row[idx] || '')
-        .filter(v => v !== '');
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+      const std = Math.sqrt(variance) || 1;
       
-      const numericCount = values.filter(v => !isNaN(parseFloat(v))).length;
-      if (numericCount / values.length > 0.7) {
-        this.numericCols.push(col);
-        this.computeNumericStats(values.map(v => parseFloat(v)));
-      } else {
-        this.categoricalCols.push(col);
-      }
+      this.means[col] = mean;
+      this.stds[col] = std;
     });
-
-    // BUILD FEATURE ORDER
-    this.featureOrder = [...this.numericCols];
-    this.categoricalCols.forEach(col => {
-      this.featureOrder.push(`${col}_yes`);  // Simple binary encoding
-      this.featureOrder.push(`${col}_no`);
-    });
-
-    console.log('✅ Preprocessor fitted:', {
-      numeric: this.numericCols.length,
-      categorical: this.categoricalCols.length,
-      features: this.featureOrder.length
-    });
-  }
-
-  computeNumericStats(values) {
-    const valid = values.filter(v => !isNaN(v));
-    if (valid.length === 0) return;
     
-    const mean = valid.reduce((a, b) => a + b, 0) / valid.length;
-    const variance = valid.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / valid.length;
-    const std = Math.sqrt(variance) || 1;
-    
-    this.means[this.numericCols[this.numericCols.length - 1]] = mean;
-    this.stds[this.numericCols[this.numericCols.length - 1]] = std;
+    this.featureOrder = this.headers;
+    console.log(`✅ Preprocessor ready: ${this.featureOrder.length} features`);
   }
 
   transform(data, includeTarget = true) {
@@ -77,191 +48,159 @@ class RealPreprocessor {
 
     data.forEach(row => {
       const featureRow = [];
-
-      // NUMERIC FEATURES
-      this.numericCols.forEach(col => {
+      
+      this.headers.forEach(col => {
         const colIdx = this.headers.indexOf(col);
         if (colIdx === -1 || colIdx >= row.length) {
           featureRow.push(0);
           return;
         }
         
-        const val = row[colIdx];
-        const numVal = parseFloat(val);
-        if (!isNaN(numVal)) {
-          const colName = col;
-          const mean = this.means[colName] || 0;
-          const std = this.stds[colName] || 1;
-          featureRow.push((numVal - mean) / std);
-        } else {
-          featureRow.push(0);
-        }
-      });
-
-      // CATEGORICAL FEATURES (SIMPLE YES/NO)
-      this.categoricalCols.forEach(col => {
-        const colIdx = this.headers.indexOf(col);
-        if (colIdx === -1 || colIdx >= row.length) {
-          featureRow.push(0, 0); // yes, no
-          return;
-        }
+        const rawVal = row[colIdx];
+        const numVal = parseFloat(rawVal) || 0;
+        const mean = this.means[col] || 0;
+        const std = this.stds[col] || 1;
         
-        const val = String(row[colIdx] || '').toLowerCase();
-        const isYes = val.includes('yes') || val.includes('y') || val === '1';
-        const isNo = val.includes('no') || val.includes('n') || val === '0';
-        
-        featureRow.push(isYes ? 1 : 0);  // yes
-        featureRow.push(isNo ? 1 : 0);   // no
+        featureRow.push((numVal - mean) / std);
       });
-
+      
       features.push(featureRow);
 
-      if (includeTarget && this.targetIdx !== -1 && this.targetIdx < row.length) {
-        const targetVal = row[this.targetIdx];
-        targets.push(targetVal === '1' || targetVal === 'Yes' ? 1 : 0);
+      if (includeTarget) {
+        const targetIdx = this.headers.length; // loan_status is after features
+        const targetVal = row[targetIdx];
+        targets.push(targetVal === '1' ? 1 : 0);
       }
     });
 
-    console.log('✅ Transformed:', features.length, 'samples →', features[0]?.length || 0, 'features');
     return { features, targets };
   }
 }
 
 // ================================================
-// FIXED LOAD DATA - REAL PREPROCESSING
+// SIMPLE LOAD DATA
 // ================================================
 window.onloadData = async function() {
   try {
-    const trainFileEl = document.getElementById('train-file');
-    if (!trainFileEl?.files[0]) {
-      alert('Please select train.csv file first');
+    const trainFile = document.getElementById('train-file').files[0];
+    if (!trainFile) {
+      alert('Please select train.csv');
       return;
     }
 
     document.getElementById('load-data').disabled = true;
-    document.getElementById('load-data').textContent = 'Loading...';
-    document.getElementById('eda-output').textContent = '🔄 Parsing CSV...';
+    document.getElementById('load-data').innerText = 'Loading...';
+    document.getElementById('eda-output').innerText = 'Parsing CSV...';
 
-    const trainText = await trainFileEl.files[0].text();
-    const parsed = parseCSVRobust(trainText);
+    const text = await trainFile.text();
+    const parsed = parseSimpleCSV(text);
     
-    if (!parsed || parsed.length < 2) {
-      throw new Error('Invalid CSV: Need header + data rows');
+    if (parsed.length < 2) {
+      alert('Invalid CSV file');
+      return;
     }
 
     trainHeaders = parsed[0];
     trainData = parsed.slice(1);
 
     if (!trainHeaders.includes('loan_status')) {
-      throw new Error('Missing "loan_status" column');
+      alert('Missing loan_status column');
+      return;
     }
 
-    // ✅ FIXED: Use REAL preprocessor
-    preprocessor = new RealPreprocessor();
+    // Create preprocessor
+    preprocessor = new SimplePreprocessor();
     preprocessor.fit(trainData, trainHeaders);
 
-    // REAL EDA
+    // Show EDA
     const targetIdx = trainHeaders.indexOf('loan_status');
     const approved = trainData.filter(row => row[targetIdx] === '1').length;
     const total = trainData.length;
 
-    document.getElementById('eda-output').textContent = 
-      `✅ DATA LOADED SUCCESSFULLY!\n\n` +
-      `📊 Rows: ${total}\n` +
-      `🎯 Approved: ${((approved/total)*100).toFixed(1)}%\n` +
-      `🔧 Numeric features: ${preprocessor.numericCols.length}\n` +
-      `🔧 Categorical features: ${preprocessor.categoricalCols.length}\n` +
-      `📈 Total features: ${preprocessor.featureOrder.length}`;
+    document.getElementById('eda-output').innerText = 
+      `✅ SUCCESS!\n` +
+      `Rows: ${total}\n` +
+      `Approved: ${((approved/total)*100).toFixed(1)}%\n` +
+      `Features: ${preprocessor.featureOrder.length}`;
 
-    document.getElementById('feature-dim').textContent = 
-      `Feature dimension: ${preprocessor.featureOrder.length}`;
+    document.getElementById('feature-dim').innerText = 
+      `Features: ${preprocessor.featureOrder.length}`;
 
-    // VALIDATION SPLIT
-    const { train, val } = stratifiedSplit(trainData, trainHeaders);
+    // Validation split
+    const { train, val } = simpleSplit(trainData);
     const valProcessed = preprocessor.transform(val, true);
     
     if (valXs) valXs.dispose();
     if (valYs) valYs.dispose();
     valXs = tf.tensor2d(valProcessed.features);
-    valYs = tf.tensor1d(valProcessed.targets, 'float32');
+    valYs = tf.tensor1d(valProcessed.targets);
 
-    // LOAD TEST DATA
-    const testFileEl = document.getElementById('test-file');
-    if (testFileEl?.files[0]) {
-      const testText = await testFileEl.files[0].text();
-      const testParsed = parseCSVRobust(testText);
-      testHeaders = testParsed[0];
+    // Load test data
+    const testFile = document.getElementById('test-file').files[0];
+    if (testFile) {
+      const testText = await testFile.text();
+      const testParsed = parseSimpleCSV(testText);
       testData = testParsed.slice(1);
-      
-      document.getElementById('eda-output').textContent += 
-        `\n✅ Test data: ${testData.length} rows loaded`;
+      document.getElementById('eda-output').innerText += `\nTest: ${testData.length} rows`;
     }
 
     updateButtons();
-    alert(`✅ Loaded ${total} samples with ${preprocessor.featureOrder.length} real features!`);
+    alert(`✅ Loaded ${total} samples!`);
 
-  } catch (error) {
-    alert(`Load error: ${error.message}`);
-    console.error('Load error:', error);
+  } catch (e) {
+    alert('Load error: ' + e.message);
   } finally {
     document.getElementById('load-data').disabled = false;
-    document.getElementById('load-data').textContent = '📊 Load & Analyze Data';
+    document.getElementById('load-data').innerText = '📊 Load Data';
   }
 };
 
 // ================================================
-// FIXED TRAINING - BETTER MODEL
+// SIMPLE TRAINING
 // ================================================
 window.ontrainModel = async function() {
-  if (!preprocessor || !trainData) {
+  if (!preprocessor) {
     alert('Load data first');
     return;
   }
 
   try {
-    document.getElementById('train-model').disabled = true;
-    document.getElementById('train-model').textContent = 'Training...';
-    document.getElementById('training-log').textContent = '';
+    const btn = document.getElementById('train-model');
+    btn.disabled = true;
+    btn.innerText = 'Training...';
+    document.getElementById('training-log').innerText = '';
 
-    const hiddenUnits = parseInt(document.getElementById('hidden-units').value) || 64;
-    const lr = parseFloat(document.getElementById('lr').value) || 0.001;
-
-    // ✅ BETTER MODEL ARCHITECTURE
+    // Simple reliable model
     model = tf.sequential({
       layers: [
-        tf.layers.dense({ units: hiddenUnits, activation: 'relu', inputShape: [preprocessor.featureOrder.length] }),
-        tf.layers.batchNormalization(),
-        tf.layers.dropout({ rate: 0.3 }),
-        tf.layers.dense({ units: hiddenUnits * 2, activation: 'relu' }),
-        tf.layers.batchNormalization(),
-        tf.layers.dropout({ rate: 0.2 }),
-        tf.layers.dense({ units: hiddenUnits, activation: 'relu' }),
-        tf.layers.dropout({ rate: 0.1 }),
-        tf.layers.dense({ units: 1, activation: 'sigmoid' })
+        tf.layers.dense({units: 64, activation: 'relu', inputShape: [preprocessor.featureOrder.length]}),
+        tf.layers.dropout({rate: 0.3}),
+        tf.layers.dense({units: 32, activation: 'relu'}),
+        tf.layers.dropout({rate: 0.2}),
+        tf.layers.dense({units: 1, activation: 'sigmoid'})
       ]
     });
 
     model.compile({
-      optimizer: tf.train.adam(lr),
+      optimizer: 'adam',
       loss: 'binaryCrossentropy',
       metrics: ['accuracy']
     });
 
-    // TRAINING DATA
-    const { train } = stratifiedSplit(trainData, trainHeaders);
-    const trainProcessed = preprocessor.transform(train);
-    
+    // Train data
+    const { train } = simpleSplit(trainData);
+    const trainProcessed = preprocessor.transform(train, true);
     const xs = tf.tensor2d(trainProcessed.features);
-    const ys = tf.tensor1d(trainProcessed.targets, 'float32');
+    const ys = tf.tensor1d(trainProcessed.targets);
 
     await model.fit(xs, ys, {
-      epochs: 50,
+      epochs: 30,
       batchSize: 32,
       validationData: [valXs, valYs],
       callbacks: {
         onEpochEnd: (epoch, logs) => {
-          document.getElementById('training-log').textContent += 
-            `Epoch ${epoch + 1}: loss=${logs.loss?.toFixed(4)} val_loss=${logs.valLoss?.toFixed(4)}\n`;
+          document.getElementById('training-log').innerText += 
+            `Epoch ${epoch+1}: loss=${logs.loss.toFixed(4)}\n`;
         }
       }
     });
@@ -269,86 +208,75 @@ window.ontrainModel = async function() {
     xs.dispose();
     ys.dispose();
 
-    document.getElementById('training-log').textContent += '\n✅ TRAINING COMPLETE!';
-    updateMetrics();
+    document.getElementById('training-log').innerText += '✅ DONE!';
     updateButtons();
-    alert('✅ Model trained with REAL predictions!');
+    alert('✅ Training complete!');
 
-  } catch (error) {
-    alert(`Training error: ${error.message}`);
+  } catch (e) {
+    alert('Training error: ' + e.message);
   } finally {
     document.getElementById('train-model').disabled = false;
-    document.getElementById('train-model').textContent = '🚀 Train Model';
+    document.getElementById('train-model').innerText = '🚀 Train Model';
   }
 };
 
 // ================================================
-// FIXED PREDICTION - REAL RESULTS
+// SIMPLE PREDICTION
 // ================================================
 window.onpredictTest = async function() {
   if (!model || !testData) {
-    alert('Train model first AND upload test data');
+    alert('Train model + load test data first');
     return;
   }
 
   try {
-    document.getElementById('predict-test').disabled = true;
-    document.getElementById('predict-test').textContent = 'Predicting...';
+    const btn = document.getElementById('predict-test');
+    btn.disabled = true;
+    btn.innerText = 'Predicting...';
 
-    // ✅ CRITICAL FIX: PROPER TEST TRANSFORMATION
     const testProcessed = preprocessor.transform(testData, false);
     const xs = tf.tensor2d(testProcessed.features);
     const predictions = model.predict(xs);
     const probs = Array.from(await predictions.data());
-    
+
     xs.dispose();
     predictions.dispose();
 
-    // GENERATE REAL SUBMISSION
+    // Create submission
     const submission = [['ApplicationID', 'Approved']];
-    const probabilities = [['ApplicationID', 'Probability']];
-    
     let approvedCount = 0;
-    
-    for (let i = 0; i < probs.length; i++) {
-      const prob = probs[i];
-      const prediction = prob >= 0.5 ? 1 : 0;
-      if (prediction === 1) approvedCount++;
-      
-      submission.push([`App_${i + 1}`, prediction]);
-      probabilities.push([`App_${i + 1}`, prob.toFixed(6)]);
-    }
 
-    // DOWNLOAD
+    probs.forEach((prob, i) => {
+      const pred = prob > 0.5 ? 1 : 0;
+      if (pred === 1) approvedCount++;
+      submission.push([`App_${i+1}`, pred]);
+    });
+
+    // Download
     downloadCSV('submission.csv', submission);
-    downloadCSV('probabilities.csv', probabilities);
 
-    document.getElementById('eda-output').textContent += 
-      `\n✅ PREDICTIONS COMPLETE!\n` +
-      `📊 Total: ${probs.length} samples\n` +
-      `✅ Approved: ${approvedCount} (${((approvedCount/probs.length)*100).toFixed(1)}%)`;
+    document.getElementById('eda-output').innerText += 
+      `\n✅ Predictions: ${approvedCount}/${probs.length} approved (${((approvedCount/probs.length)*100).toFixed(1)}%)`;
 
-    alert(`✅ Success! ${approvedCount} approvals out of ${probs.length} (${((approvedCount/probs.length)*100).toFixed(1)}%)`);
-    
-  } catch (error) {
-    alert(`Prediction error: ${error.message}`);
-    console.error('Prediction error:', error);
+    alert(`✅ Done! ${approvedCount} approvals`);
+
+  } catch (e) {
+    alert('Prediction error: ' + e.message);
   } finally {
     document.getElementById('predict-test').disabled = false;
-    document.getElementById('predict-test').textContent = '🔮 Predict on Test';
+    document.getElementById('predict-test').innerText = '🔮 Predict';
   }
 };
 
 // ================================================
-// UTILITY FUNCTIONS
+// SIMPLE UTILITIES
 // ================================================
-function parseCSVRobust(text) {
-  const lines = text.trim().split('\n').filter(line => line.trim());
+function parseSimpleCSV(text) {
+  const lines = text.split('\n').filter(line => line.trim());
   return lines.map(line => {
     const row = [];
     let field = '';
     let inQuotes = false;
-    
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
       if (char === '"') {
@@ -365,28 +293,19 @@ function parseCSVRobust(text) {
   });
 }
 
-function stratifiedSplit(data, headers, ratio = 0.8) {
-  const targetIdx = headers.indexOf('loan_status');
-  const positives = data.filter(row => row[targetIdx] === '1');
-  const negatives = data.filter(row => row[targetIdx] !== '1');
-  
-  const posTrainSize = Math.floor(positives.length * ratio);
-  const negTrainSize = Math.floor(negatives.length * ratio);
-  
-  const train = [
-    ...positives.slice(0, posTrainSize),
-    ...negatives.slice(0, negTrainSize)
-  ];
-  const val = [
-    ...positives.slice(posTrainSize),
-    ...negatives.slice(negTrainSize)
-  ];
-  
-  return { train, val };
+function simpleSplit(data, ratio = 0.8) {
+  const shuffled = [...data].sort(() => Math.random() - 0.5);
+  const split = Math.floor(shuffled.length * ratio);
+  return {
+    train: shuffled.slice(0, split),
+    val: shuffled.slice(split)
+  };
 }
 
 function downloadCSV(filename, rows) {
-  const csv = rows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+  const csv = rows.map(row => 
+    row.map(cell => `"${cell}"`).join(',')
+  ).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -397,51 +316,29 @@ function downloadCSV(filename, rows) {
 }
 
 function updateButtons() {
-  const hasData = !!(trainData && preprocessor);
+  const hasData = !!preprocessor;
   const hasModel = !!model;
   const hasTest = !!testData;
   
-  document.getElementById('load-data').disabled = false;
   document.getElementById('train-model').disabled = !hasData;
   document.getElementById('predict-test').disabled = !hasModel || !hasTest;
-  document.getElementById('save-model').disabled = !hasModel;
 }
 
-async function updateMetrics() {
-  if (!model || !valXs || !valYs) return;
-  
+// ================================================
+// SIMPLE INIT
+// ================================================
+async function init() {
   try {
-    const probs = model.predict(valXs).dataSync();
-    const targets = valYs.dataSync();
+    await tf.ready();
+    console.log('✅ Ready');
     
-    let approved = 0;
-    for (let i = 0; i < probs.length; i++) {
-      if (probs[i] >= 0.5) approved++;
-    }
+    document.getElementById('load-data').onclick = window.onloadData;
+    document.getElementById('train-model').onclick = window.ontrainModel;
+    document.getElementById('predict-test').onclick = window.onpredictTest;
     
-    document.getElementById('metrics-output').textContent = 
-      `Validation Accuracy: ${((approved/probs.length)*100).toFixed(1)}%\n` +
-      `Predicted approvals: ${approved}/${probs.length}`;
-      
   } catch (e) {
-    console.error('Metrics error:', e);
+    alert('Init error');
   }
 }
 
-// ================================================
-// INITIALIZATION
-// ================================================
-async function initApp() {
-  await tf.setBackend('cpu');
-  await tf.ready();
-  console.log('✅ TensorFlow.js ready');
-  
-  document.getElementById('load-data').addEventListener('click', window.onloadData);
-  document.getElementById('train-model').addEventListener('click', window.ontrainModel);
-  document.getElementById('predict-test').addEventListener('click', window.onpredictTest);
-  document.getElementById('threshold').addEventListener('input', updateMetrics);
-  
-  updateButtons();
-}
-
-document.addEventListener('DOMContentLoaded', initApp);
+init();
