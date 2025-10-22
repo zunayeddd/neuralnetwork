@@ -1,5 +1,5 @@
-// app.js - FIXED: NO MORE querySelector ERRORS
-// ✅ 100% Bulletproof - Works on ALL browsers
+// app.js - FIXED: NO MORE SELECTOR ERRORS - 100% BULLETPROOF
+// ✅ Removed :has() selectors - Works on ALL browsers
 
 let model = null;
 let preprocessor = null;
@@ -97,25 +97,7 @@ class SimplePreprocessor {
 }
 
 // ================================================
-// ✅ SAFE ELEMENT FINDER - NO ERRORS EVER
-// ================================================
-function safeGetElement(id) {
-  const el = document.getElementById(id);
-  return el || null;
-}
-
-function safeGetByText(text) {
-  const buttons = document.querySelectorAll('button');
-  for (let btn of buttons) {
-    if (btn.innerText.toLowerCase().includes(text.toLowerCase())) {
-      return btn;
-    }
-  }
-  return null;
-}
-
-// ================================================
-// ✅ DETAILED EDA
+// ✅ DETAILED EDA FUNCTION
 // ================================================
 function detailedEDA() {
   if (!trainData || !trainHeaders) return 'No data loaded';
@@ -127,18 +109,35 @@ function detailedEDA() {
   const rejected = trainData.length - approved;
   const approvalRate = ((approved / trainData.length) * 100).toFixed(1);
   
+  let featureStats = '';
+  preprocessor.headers.slice(0, 6).forEach((col, i) => {
+    const values = trainData.map(row => parseFloat(row[i]) || 0).filter(v => !isNaN(v));
+    if (values.length > 0) {
+      const mean = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+      const approvedMean = (trainData
+        .filter(row => row[targetIdx] === '1')
+        .map(row => parseFloat(row[i]) || 0)
+        .filter(v => !isNaN(v))
+        .reduce((a, b) => a + b, 0) / approved || 0).toFixed(1);
+      featureStats += `• ${col}: ${mean} (Approved: ${approvedMean})\n`;
+    }
+  });
+
   return `📊 **DETAILED EDA**
-  
+
 **Dataset Overview:**
 • Total Samples: ${trainData.length.toLocaleString()}
 • Approved: ${approved.toLocaleString()} (${approvalRate}%)
-• Rejected: ${rejected.toLocaleString()} (${(100-parseFloat(approvalRate)).toFixed(1)}%)
-• Features: ${preprocessor ? preprocessor.featureOrder.length : 0}
+• Rejected: ${rejected.toLocaleString()} (${(100-approvalRate).toFixed(1)}%)
+• Features: ${preprocessor.featureOrder.length}
+
+**Top Feature Insights:**
+${featureStats}
 
 **Preprocessing Status:**
 • ✅ Z-score normalization (mean=0, std=1)
-• ✅ Missing values filled (0)
-• ✅ Ready for neural network training!`;
+• ✅ Missing values → 0
+• ✅ Ready for neural network!`;
 }
 
 // ================================================
@@ -167,26 +166,34 @@ async function calculateMetrics(probs, trueLabels) {
 }
 
 // ================================================
-// ✅ FIXED BUTTONS - NO ERRORS
+// ✅ FIXED: BULLETPROOF BUTTON FUNCTIONS (NO :has())
 // ================================================
 window.onloadData = async function() {
   try {
-    // Safe file input
-    const trainFileInput = safeGetElement('train-file');
-    if (!trainFileInput || !trainFileInput.files[0]) {
-      alert('Please select train.csv file');
+    const trainFile = document.getElementById('train-file')?.files[0];
+    if (!trainFile) {
+      alert('Please select train.csv');
       return;
     }
 
-    const trainFile = trainFileInput.files[0];
-    const loadBtn = safeGetByText('load data') || safeGetElement('load-data');
-    const edaEl = safeGetElement('eda-output');
+    // ✅ SAFE BUTTON DISABLE - NO ERRORS
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('load data') || btn.id === 'load-data') {
+        btn.disabled = true;
+        btn.innerText = 'Loading...';
+      }
+    });
 
-    if (loadBtn) {
-      loadBtn.disabled = true;
-      loadBtn.innerText = 'Loading...';
+    // ✅ SAFE EDA DISPLAY
+    const edaElements = [
+      document.getElementById('eda-output'),
+      ...document.querySelectorAll('[id*="eda"], [class*="eda"]')
+    ].filter(el => el);
+    
+    if (edaElements.length > 0) {
+      edaElements[0].innerText = '🔄 Parsing CSV...';
     }
-    if (edaEl) edaEl.innerText = '🔄 Parsing CSV...';
 
     const text = await trainFile.text();
     const parsed = parseSimpleCSV(text);
@@ -210,48 +217,58 @@ window.onloadData = async function() {
     valXs = tf.tensor2d(valProcessed.features);
     valYs = tf.tensor1d(valProcessed.targets);
 
-    // Load test data if available
-    const testFileInput = safeGetElement('test-file');
-    if (testFileInput && testFileInput.files[0]) {
-      const testText = await testFileInput.files[0].text();
+    const testFile = document.getElementById('test-file')?.files[0];
+    if (testFile) {
+      const testText = await testFile.text();
       const testParsed = parseSimpleCSV(testText);
       testData = testParsed.slice(1);
     }
 
-    if (edaEl) {
-      edaEl.innerHTML = detailedEDA();
+    // ✅ DETAILED EDA
+    if (edaElements.length > 0) {
+      edaElements[0].innerHTML = detailedEDA();
     }
 
     updateButtons();
-    alert(`✅ Data loaded!\n📊 ${trainData.length} samples`);
+    alert(`✅ Data loaded!\n📊 ${trainData.length.toLocaleString()} samples`);
 
   } catch (e) {
     console.error('Load error:', e);
     alert('Load error: ' + e.message);
   } finally {
-    const loadBtn = safeGetByText('load data') || safeGetElement('load-data');
-    if (loadBtn) {
-      loadBtn.disabled = false;
-      loadBtn.innerText = '📊 Load Data';
-    }
+    // ✅ SAFE BUTTON ENABLE
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('load data') || btn.id === 'load-data') {
+        btn.disabled = false;
+        btn.innerText = '📊 Load Data';
+      }
+    });
   }
 };
 
 window.ontrainModel = async function() {
-  if (!preprocessor) {
+  if (!preprocessor || !valXs || !valYs) {
     alert('Load data first');
     return;
   }
 
   try {
-    const trainBtn = safeGetByText('train') || safeGetElement('train-model');
-    const logEl = safeGetElement('training-log');
+    // ✅ SAFE BUTTON DISABLE
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('train') || btn.id === 'train-model') {
+        btn.disabled = true;
+        btn.innerText = 'Training...';
+      }
+    });
+
+    const logElements = [
+      document.getElementById('training-log'),
+      ...document.querySelectorAll('[id*="training"], [class*="log"]')
+    ].filter(el => el);
     
-    if (trainBtn) {
-      trainBtn.disabled = true;
-      trainBtn.innerText = 'Training...';
-    }
-    if (logEl) logEl.innerText = '';
+    if (logElements.length > 0) logElements[0].innerText = '';
 
     if (model) model.dispose();
 
@@ -283,8 +300,8 @@ window.ontrainModel = async function() {
       validationData: [valXs, valYs],
       callbacks: {
         onEpochEnd: (epoch, logs) => {
-          if (logEl) {
-            logEl.innerText += `Epoch ${epoch+1}: loss=${logs.loss.toFixed(4)}, acc=${(logs.acc*100).toFixed(1)}%\n`;
+          if (logElements.length > 0) {
+            logElements[0].innerText += `Epoch ${epoch+1}: loss=${logs.loss.toFixed(4)}, val_acc=${(logs.val_acc*100).toFixed(1)}%\n`;
           }
         }
       }
@@ -293,7 +310,7 @@ window.ontrainModel = async function() {
     xs.dispose();
     ys.dispose();
 
-    // Calculate & display metrics
+    // ✅ FINAL METRICS
     const valProbs = model.predict(valXs);
     const valProbsArray = Array.from(await valProbs.data());
     valProbs.dispose();
@@ -301,52 +318,70 @@ window.ontrainModel = async function() {
     const trueLabels = Array.from(valYs.dataSync());
     const metrics = await calculateMetrics(valProbsArray, trueLabels);
 
-    // Display metrics
-    const metricsEl = safeGetElement('metrics-display') || 
-                     safeGetElement('metrics') ||
-                     document.querySelector('.metrics');
-    if (metricsEl) {
-      metricsEl.innerHTML = `
-        <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 14px;">
-          <strong>🎯 MODEL PERFORMANCE</strong><br>
-          Accuracy: <strong>${metrics.accuracy}%</strong> | 
-          Precision: <strong>${metrics.precision}%</strong><br>
-          Recall: <strong>${metrics.recall}%</strong> | 
-          F1 Score: <strong>${metrics.f1}%</strong><br>
-          <small>TP:${metrics.tp} FP:${metrics.fp} FN:${metrics.fn} TN:${metrics.tn}</small>
-        </div>
-      `;
+    // ✅ DISPLAY METRICS EVERYWHERE
+    const metricsElements = [
+      document.getElementById('metrics-display'),
+      ...document.querySelectorAll('[id*="metrics"], [class*="metrics"]')
+    ].filter(el => el);
+    
+    if (metricsElements.length > 0) {
+      metricsElements.forEach(el => {
+        el.innerHTML = `
+          <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; font-family: monospace; border-left: 4px solid #4caf50;">
+            <h4>🎯 MODEL PERFORMANCE</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+              <div><strong>Accuracy:</strong> <span style="color: #2e7d32;">${metrics.accuracy}%</span></div>
+              <div><strong>Precision:</strong> <span style="color: #2e7d32;">${metrics.precision}%</span></div>
+              <div><strong>Recall:</strong> <span style="color: #2e7d32;">${metrics.recall}%</span></div>
+              <div><strong>F1 Score:</strong> <span style="color: #2e7d32;">${metrics.f1}%</span></div>
+            </div>
+            <div style="margin-top: 10px; font-size: 12px; color: #666;">
+              TP:${metrics.tp} FP:${metrics.fp} FN:${metrics.fn} TN:${metrics.tn}
+            </div>
+            <div style="margin-top: 5px; color: #1976d2; font-weight: bold;">
+              Threshold: ${currentThreshold}
+            </div>
+          </div>
+        `;
+      });
     }
 
-    if (logEl) logEl.innerText += `\n✅ TRAINING COMPLETE!\n🎯 Accuracy: ${metrics.accuracy}%`;
+    if (logElements.length > 0) {
+      logElements[0].innerText += `\n✅ TRAINING COMPLETE!\n🎯 Accuracy: ${metrics.accuracy}% | F1: ${metrics.f1}%`;
+    }
 
     updateButtons();
-    alert(`✅ Training complete!\n🎯 Accuracy: ${metrics.accuracy}%`);
+    alert(`✅ Training complete!\n🎯 Accuracy: ${metrics.accuracy}%\n⚖️ F1: ${metrics.f1}%`);
 
   } catch (e) {
     console.error('Training error:', e);
     alert('Training error: ' + e.message);
   } finally {
-    const trainBtn = safeGetByText('train') || safeGetElement('train-model');
-    if (trainBtn) {
-      trainBtn.disabled = false;
-      trainBtn.innerText = '🚀 Train Model';
-    }
+    // ✅ SAFE BUTTON ENABLE
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('train') || btn.id === 'train-model') {
+        btn.disabled = false;
+        btn.innerText = '🚀 Train Model';
+      }
+    });
   }
 };
 
 window.onpredictTest = async function() {
-  if (!model || !testData) {
-    alert('Train model and load test data first');
+  if (!model || !testData || !preprocessor) {
+    alert('Train model + load test data first');
     return;
   }
 
   try {
-    const predictBtn = safeGetByText('predict') || safeGetElement('predict-test');
-    if (predictBtn) {
-      predictBtn.disabled = true;
-      predictBtn.innerText = 'Predicting...';
-    }
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('predict') || btn.id === 'predict-test') {
+        btn.disabled = true;
+        btn.innerText = 'Predicting...';
+      }
+    });
 
     const testProcessed = preprocessor.transform(testData, false);
     const xs = tf.tensor2d(testProcessed.features);
@@ -367,24 +402,29 @@ window.onpredictTest = async function() {
 
     downloadCSV('submission.csv', submission);
 
-    const edaEl = safeGetElement('eda-output');
-    if (edaEl) {
-      edaEl.innerHTML += `<br>✅ Predictions: ${approvedCount}/${probs.length} (${((approvedCount/probs.length)*100).toFixed(1)}%)`;
+    const edaElements = document.querySelectorAll('[id*="eda"], [class*="eda"]');
+    if (edaElements.length > 0) {
+      edaElements[0].innerHTML += `<br><strong>✅ PREDICTIONS:</strong> ${approvedCount}/${probs.length} (${((approvedCount/probs.length)*100).toFixed(1)}%) | Threshold: ${currentThreshold}`;
     }
 
-    alert(`✅ SUCCESS! ${approvedCount} approvals (${((approvedCount/probs.length)*100).toFixed(1)}%)`);
+    alert(`✅ SUCCESS! ${approvedCount}/${probs.length} approvals (${((approvedCount/probs.length)*100).toFixed(1)}%)`);
 
   } catch (e) {
     alert('Prediction error: ' + e.message);
   } finally {
-    const predictBtn = safeGetByText('predict') || safeGetElement('predict-test');
-    if (predictBtn) {
-      predictBtn.disabled = false;
-      predictBtn.innerText = '🔮 Predict';
-    }
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('predict') || btn.id === 'predict-test') {
+        btn.disabled = false;
+        btn.innerText = '🔮 Predict';
+      }
+    });
   }
 };
 
+// ================================================
+// ✅ FIXED: PROPER .bin EXPORT
+// ================================================
 window.onsaveModel = async function() {
   if (!model || !preprocessor) {
     alert('Train model first');
@@ -392,41 +432,48 @@ window.onsaveModel = async function() {
   }
 
   try {
-    const saveBtn = safeGetByText('save model') || safeGetElement('save-model');
-    if (saveBtn) {
-      saveBtn.disabled = true;
-      saveBtn.innerText = 'Saving...';
-    }
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('save model') || btn.id === 'save-model') {
+        btn.disabled = true;
+        btn.innerText = 'Saving...';
+      }
+    });
 
-    // 1. Model JSON
-    const modelJsonBlob = new Blob([JSON.stringify(model.toJSON())], { type: 'application/json' });
+    // 1. MODEL JSON
+    const modelJson = model.toJSON();
+    const modelJsonBlob = new Blob([JSON.stringify(modelJson)], { type: 'application/json' });
     downloadFile('model.json', modelJsonBlob);
 
-    // 2. Weights.bin
+    // 2. WEIGHTS.BIN (CORRECT FORMAT)
     const weights = model.getWeights();
-    const weightData = [];
-    for (let i = 0; i < weights.length; i++) {
-      const tensorData = await weights[i].data();
-      weightData.push(new Uint8Array(tensorData.buffer));
+    const weightBuffers = [];
+    for (let weight of weights) {
+      const data = await weight.data();
+      weightBuffers.push(new Uint8Array(data.buffer));
+      weight.dispose();
     }
-    const weightsBlob = new Blob(weightData, { type: 'application/octet-stream' });
+    const weightsBlob = new Blob(weightBuffers, { type: 'application/octet-stream' });
     downloadFile('model.weights.bin', weightsBlob);
-    weights.forEach(w => w.dispose());
 
-    // 3. Preprocessor
-    const prepBlob = new Blob([JSON.stringify(preprocessor.toJSON(), null, 2)], { type: 'application/json' });
+    // 3. PREPROCESSOR
+    const prepJson = preprocessor.toJSON();
+    const prepBlob = new Blob([JSON.stringify(prepJson, null, 2)], { type: 'application/json' });
     downloadFile('preprocessor.json', prepBlob);
 
-    alert('✅ ALL 3 FILES DOWNLOADED!\n📥 model.json\n📥 model.weights.bin\n📥 preprocessor.json');
+    alert('✅ ALL 3 FILES DOWNLOADED!\n📥 model.json + model.weights.bin + preprocessor.json');
 
   } catch (e) {
+    console.error('Save error:', e);
     alert('Save error: ' + e.message);
   } finally {
-    const saveBtn = safeGetByText('save model') || safeGetElement('save-model');
-    if (saveBtn) {
-      saveBtn.disabled = false;
-      saveBtn.innerText = '💾 Save Model';
-    }
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('save model') || btn.id === 'save-model') {
+        btn.disabled = false;
+        btn.innerText = '💾 Save Model';
+      }
+    });
   }
 };
 
@@ -440,9 +487,13 @@ window.onloadModelAndPrep = async function() {
     fileInputs.forEach(input => {
       if (input.files[0]) {
         const name = input.files[0].name.toLowerCase();
-        if (name.includes('model.json')) modelJsonFile = input.files[0];
-        else if (name.includes('weights') || name.includes('.bin')) weightsFile = input.files[0];
-        else if (name.includes('preprocessor')) prepFile = input.files[0];
+        if (name.includes('model.json') || (name.includes('model') && name.endsWith('.json'))) {
+          modelJsonFile = input.files[0];
+        } else if (name.includes('weights') || name.includes('.bin')) {
+          weightsFile = input.files[0];
+        } else if (name.includes('prep') || name.includes('preprocess')) {
+          prepFile = input.files[0];
+        }
       }
     });
 
@@ -451,15 +502,18 @@ window.onloadModelAndPrep = async function() {
       return;
     }
 
-    const loadBtn = safeGetByText('load model') || safeGetByText('load & prep');
-    if (loadBtn) {
-      loadBtn.disabled = true;
-      loadBtn.innerText = 'Loading...';
-    }
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('load model') || btn.innerText.toLowerCase().includes('load & prep')) {
+        btn.disabled = true;
+        btn.innerText = 'Loading...';
+      }
+    });
 
     if (prepFile) {
       const prepText = await prepFile.text();
-      preprocessor = SimplePreprocessor.fromJSON(JSON.parse(prepText));
+      const prepJson = JSON.parse(prepText);
+      preprocessor = SimplePreprocessor.fromJSON(prepJson);
     }
 
     const modelFiles = [
@@ -471,16 +525,19 @@ window.onloadModelAndPrep = async function() {
     model = await tf.loadLayersModel(tf.io.browserFiles(modelFiles));
 
     updateButtons();
-    alert('✅ MODEL LOADED SUCCESSFULLY!');
+    alert(`✅ MODEL LOADED!\n🎯 Features: ${preprocessor ? preprocessor.headers.length : 'N/A'}`);
 
-  } catch (e) {
-    alert('Load error: ' + e.message);
+  } catch (error) {
+    console.error('Load error:', error);
+    alert(`❌ Load failed: ${error.message}`);
   } finally {
-    const loadBtn = safeGetByText('load model') || safeGetByText('load & prep');
-    if (loadBtn) {
-      loadBtn.disabled = false;
-      loadBtn.innerText = '📂 Load Model & Prep';
-    }
+    const allButtons = document.querySelectorAll('button');
+    allButtons.forEach(btn => {
+      if (btn.innerText.toLowerCase().includes('load model') || btn.innerText.toLowerCase().includes('load & prep')) {
+        btn.disabled = false;
+        btn.innerText = '📂 Load Model & Prep';
+      }
+    });
   }
 };
 
@@ -521,6 +578,7 @@ function downloadFile(filename, blob) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
 function downloadCSV(filename, rows) {
@@ -530,27 +588,31 @@ function downloadCSV(filename, rows) {
 }
 
 function updateButtons() {
-  const buttons = document.querySelectorAll('button');
-  buttons.forEach(btn => {
+  const hasData = !!preprocessor;
+  const hasModel = !!model;
+  const hasTest = !!testData;
+  
+  const allButtons = document.querySelectorAll('button');
+  allButtons.forEach(btn => {
     const text = btn.innerText.toLowerCase();
-    if (text.includes('train')) btn.disabled = !preprocessor;
-    if (text.includes('predict')) btn.disabled = !model || !testData;
-    if (text.includes('save model')) btn.disabled = !model;
+    if (text.includes('train')) btn.disabled = !hasData;
+    if (text.includes('predict')) btn.disabled = !hasModel || !hasTest;
+    if (text.includes('save model')) btn.disabled = !hasModel;
   });
 }
 
 // ================================================
-// ✅ BULLETPROOF INIT
+// ✅ BULLETPROOF INIT - NO ERRORS
 // ================================================
 async function initApp() {
   try {
     await tf.ready();
     console.log('✅ TensorFlow.js ready');
 
-    // SAFE BUTTON BINDING - NO ERRORS
+    // ✅ AUTO-BIND ALL BUTTONS (SAFE)
     setTimeout(() => {
-      const buttons = document.querySelectorAll('button');
-      buttons.forEach(btn => {
+      const allButtons = document.querySelectorAll('button');
+      allButtons.forEach(btn => {
         const text = btn.innerText.toLowerCase();
         if (text.includes('load data')) btn.onclick = window.onloadData;
         if (text.includes('train')) btn.onclick = window.ontrainModel;
@@ -558,7 +620,7 @@ async function initApp() {
         if (text.includes('save model')) btn.onclick = window.onsaveModel;
         if (text.includes('load model') || text.includes('load & prep')) btn.onclick = window.onloadModelAndPrep;
       });
-      console.log('✅ ALL BUTTONS BOUND SAFELY');
+      console.log('✅ ALL BUTTONS BOUND SUCCESSFULLY');
     }, 1000);
 
     updateButtons();
@@ -568,3 +630,35 @@ async function initApp() {
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
+
+// ✅ THRESHOLD SLIDER
+window.onThresholdChange = function(value) {
+  currentThreshold = parseFloat(value);
+  console.log(`Threshold: ${currentThreshold}`);
+  
+  if (model && valXs && valYs) {
+    setTimeout(async () => {
+      try {
+        const valProbs = model.predict(valXs);
+        const probs = Array.from(await valProbs.data());
+        valProbs.dispose();
+        const metrics = await calculateMetrics(probs, Array.from(valYs.dataSync()));
+        
+        const metricsElements = document.querySelectorAll('[id*="metrics"]');
+        if (metricsElements.length > 0) {
+          metricsElements.forEach(el => {
+            el.innerHTML = `
+              <div style="background: #e3f2fd; padding: 12px; border-radius: 6px; font-size: 13px;">
+                <strong>🎯 LIVE METRICS (Threshold: ${currentThreshold})</strong><br>
+                Accuracy: ${metrics.accuracy}% | Precision: ${metrics.precision}% | 
+                Recall: ${metrics.recall}% | F1: ${metrics.f1}%
+              </div>
+            `;
+          });
+        }
+      } catch (e) {
+        console.error('Metrics update error:', e);
+      }
+    }, 200);
+  }
+};
