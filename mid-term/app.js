@@ -1,4 +1,4 @@
-// app.js - FIXED: Predict on Test button now works properly
+// app.js - FIXED: row.join is not a function error resolved
 // UI, model training, evaluation, and prediction for Loan Approval Predictor
 
 let model = null;
@@ -40,7 +40,7 @@ async function initApp() {
 
 document.addEventListener('DOMContentLoaded', initApp);
 
-// FIXED: Load and preprocess data with proper test data handling
+// ✅ FIXED: Robust data loading with proper array validation
 async function loadData() {
   try {
     const trainFile = document.getElementById('train-file').files[0];
@@ -51,17 +51,24 @@ async function loadData() {
     document.getElementById('load-data').disabled = true;
     document.getElementById('eda-output').textContent = 'Loading train data...';
 
-    // Load TRAIN data first
+    // Load TRAIN data
     const trainReader = new FileReader();
     trainReader.onload = async (e) => {
       try {
-        trainData = parseCSV(e.target.result);
-        if (!trainData || trainData.length === 0) {
-          throw new Error('Invalid train CSV format');
+        const rawData = e.target.result;
+        trainData = parseCSV(rawData);
+        
+        if (!Array.isArray(trainData) || trainData.length < 2) {
+          throw new Error('Invalid train CSV format - no data rows found');
         }
         
-        trainHeaders = trainData[0];
-        trainData = trainData.slice(1);
+        trainHeaders = Array.isArray(trainData[0]) ? trainData[0] : trainData[0].split(',');
+        trainData = trainData.slice(1).filter(row => 
+          Array.isArray(row) && row.length > 0
+        );
+
+        console.log('Train headers:', trainHeaders);
+        console.log('Train rows:', trainData.length);
 
         if (!trainHeaders.includes('loan_status')) {
           throw new Error('train.csv missing loan_status column');
@@ -70,24 +77,22 @@ async function loadData() {
         // Create preprocessor
         preprocessor = new Preprocessor();
 
-        // Engineer features for train data
+        // Engineer features for train data if enabled
         if (document.getElementById('engineer-features').checked) {
-          const { data, headers } = preprocessor.engineerFeatures(trainData, trainHeaders);
-          trainData = data;
-          trainHeaders = headers;
+          const result = preprocessor.engineerFeatures(trainData, trainHeaders);
+          trainData = result.data;
+          trainHeaders = result.headers;
         }
 
-        // Show EDA
         showEDA();
         fitPreprocessor();
         createValidationSplit();
 
         // Load TEST data if provided
         if (testFile) {
-          document.getElementById('eda-output').textContent += '\nLoading test data...';
           loadTestData(testFile);
         } else {
-          document.getElementById('eda-output').textContent += '\nNo test file provided';
+          document.getElementById('eda-output').textContent += '\n⚠️ No test file provided';
           enableButtons();
         }
 
@@ -106,71 +111,78 @@ async function loadData() {
   }
 }
 
-// NEW: Separate test data loading function
+// ✅ FIXED: Robust test data loading
 function loadTestData(testFile) {
   const testReader = new FileReader();
   testReader.onload = (e) => {
     try {
-      testData = parseCSV(e.target.result);
-      if (!testData || testData.length === 0) {
+      const rawData = e.target.result;
+      testData = parseCSV(rawData);
+      
+      if (!Array.isArray(testData) || testData.length < 2) {
         throw new Error('Invalid test CSV format');
       }
       
-      testHeaders = testData[0];
-      testData = testData.slice(1);
-      
+      testHeaders = Array.isArray(testData[0]) ? testData[0] : testData[0].split(',');
+      testData = testData.slice(1).filter(row => 
+        Array.isArray(row) && row.length > 0
+      );
+
       // Engineer features for test data if enabled
       if (document.getElementById('engineer-features').checked && preprocessor) {
-        const { data, headers } = preprocessor.engineerFeatures(testData, testHeaders);
-        testData = data;
-        testHeaders = headers;
+        const result = preprocessor.engineerFeatures(testData, testHeaders);
+        testData = result.data;
+        testHeaders = result.headers;
       }
       
-      console.log('✅ Test data loaded successfully:', testData.length, 'rows');
+      console.log('✅ Test data loaded:', testData.length, 'rows');
       document.getElementById('eda-output').textContent += `\n✅ Test data loaded: ${testData.length} rows`;
       enableButtons();
       
     } catch (err) {
       console.error('Test data error:', err);
       document.getElementById('eda-output').textContent += `\n❌ Test data error: ${err.message}`;
-      enableButtons(); // Still enable other buttons
+      enableButtons();
     }
   };
   testReader.readAsText(testFile);
 }
 
-// Show EDA statistics
 function showEDA() {
   const edaOutput = document.getElementById('eda-output');
-  const shape = `${trainData.length} rows, ${trainHeaders.length} columns`;
   const targetIdx = trainHeaders.indexOf('loan_status');
-  const targetRate = trainData.reduce((sum, row) => sum + (row[targetIdx] === '1' ? 1 : 0), 0) / trainData.length;
+  const targetCount = trainData.reduce((sum, row) => {
+    const targetVal = row[targetIdx];
+    return sum + (targetVal === '1' || targetVal === 'Y' || targetVal === 'yes' ? 1 : 0);
+  }, 0);
+  
+  const targetRate = targetCount / trainData.length;
+  const shape = `${trainData.length} rows, ${trainHeaders.length} columns`;
   
   edaOutput.textContent = `✅ Train data loaded!\nShape: ${shape}\nTarget Rate: ${(targetRate * 100).toFixed(2)}%\n\nPreprocessing...`;
 }
 
-// Fit preprocessor
 function fitPreprocessor() {
   preprocessor.fit(trainData, trainHeaders);
   document.getElementById('feature-dim').textContent = `Feature Dimension: ${preprocessor.featureOrder.length}`;
   
-  // Show data preview
+  // Data preview
   const previewTable = document.getElementById('preview-table');
   previewTable.innerHTML = '';
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
-  trainHeaders.slice(0, 8).forEach(h => { // Show first 8 columns
+  Math.min(8, trainHeaders.length).forEach((h, i) => {
     const th = document.createElement('th');
-    th.textContent = h;
+    th.textContent = trainHeaders[i];
     headerRow.appendChild(th);
   });
   thead.appendChild(headerRow);
   previewTable.appendChild(thead);
   
   const tbody = document.createElement('tbody');
-  trainData.slice(0, 10).forEach(row => {
+  Math.min(10, trainData.length).forEach((row, rowIdx) => {
     const tr = document.createElement('tr');
-    row.slice(0, 8).forEach(cell => {
+    Math.min(8, row.length).forEach((cell, cellIdx) => {
       const td = document.createElement('td');
       td.textContent = cell;
       tr.appendChild(td);
@@ -180,7 +192,6 @@ function fitPreprocessor() {
   previewTable.appendChild(tbody);
 }
 
-// Create validation split
 function createValidationSplit() {
   const { train, val } = stratifiedSplit(trainData, trainHeaders);
   const valProcessed = preprocessor.transform(val);
@@ -192,32 +203,46 @@ function createValidationSplit() {
   valYs = tf.tensor1d(valProcessed.targets, 'float32');
 }
 
-// FIXED: Predict on test data
+// ✅ FIXED: Prediction with robust array handling
 async function predictTest() {
   if (!model) {
     alert('Please train a model first');
     return;
   }
   
-  if (!testData || testData.length === 0) {
-    alert('No test data loaded. Please upload test.csv and click "Load Data"');
+  if (!testData || !Array.isArray(testData) || testData.length === 0) {
+    alert('No valid test data loaded. Please upload test.csv and click "Load Data"');
     return;
   }
 
   try {
     document.getElementById('predict-test').disabled = true;
-    document.getElementById('eda-output').textContent = 'Generating predictions...';
+    document.getElementById('eda-output').textContent = '🎯 Generating predictions...';
 
-    const { features } = preprocessor.transform(testData, false, false);
-    const xs = tf.tensor2d(features);
+    // ✅ FIXED: Ensure features is always array of arrays
+    const processed = preprocessor.transform(testData, false, false);
+    if (!Array.isArray(processed.features) || processed.features.length === 0) {
+      throw new Error('No valid features extracted from test data');
+    }
+
+    const xs = tf.tensor2d(processed.features);
     const probs = model.predict(xs).dataSync();
     const threshold = parseFloat(document.getElementById('threshold').value);
     const preds = probs.map(p => p >= threshold ? 1 : 0);
 
-    // Create submission.csv
-    const submission = [['ApplicationID', 'Approved'], 
-      ...probs.map((_, i) => [`App${i}`, preds[i]])];
-    const submissionCSV = submission.map(row => row.join(',')).join('\n');
+    // ✅ FIXED: Robust CSV generation
+    const submissionRows = [
+      ['ApplicationID', 'Approved']
+    ];
+    
+    for (let i = 0; i < testData.length; i++) {
+      submissionRows.push([`App${i}`, preds[i]]);
+    }
+    
+    const submissionCSV = submissionRows.map(row => 
+      row.map(cell => String(cell)).join(',')
+    ).join('\n');
+    
     const submissionBlob = new Blob([submissionCSV], { type: 'text/csv' });
     const submissionUrl = URL.createObjectURL(submissionBlob);
     const submissionLink = document.getElementById('download-submission');
@@ -226,10 +251,19 @@ async function predictTest() {
     submissionLink.style.display = 'inline-block';
     submissionLink.textContent = '✅ Download submission.csv';
 
-    // Create probabilities.csv
-    const probabilities = [['ApplicationID', 'Probability'], 
-      ...probs.map((p, i) => [`App${i}`, p.toFixed(6)])];
-    const probabilitiesCSV = probabilities.map(row => row.join(',')).join('\n');
+    // Probabilities CSV
+    const probRows = [
+      ['ApplicationID', 'Probability']
+    ];
+    
+    for (let i = 0; i < probs.length; i++) {
+      probRows.push([`App${i}`, probs[i].toFixed(6)]);
+    }
+    
+    const probabilitiesCSV = probRows.map(row => 
+      row.map(cell => String(cell)).join(',')
+    ).join('\n');
+    
     const probabilitiesBlob = new Blob([probabilitiesCSV], { type: 'text/csv' });
     const probabilitiesUrl = URL.createObjectURL(probabilitiesBlob);
     const probabilitiesLink = document.getElementById('download-probabilities');
@@ -240,18 +274,18 @@ async function predictTest() {
 
     xs.dispose();
     
-    document.getElementById('eda-output').textContent += `\n✅ Predictions complete! ${testData.length} samples processed`;
+    document.getElementById('eda-output').textContent += `\n🎉 Predictions complete! ${testData.length} samples processed`;
     console.log('✅ Prediction complete:', probs.length, 'samples');
 
   } catch (err) {
-    alert(`Prediction error: ${err.message}`);
     console.error('Prediction error:', err);
+    alert(`Prediction error: ${err.message}`);
   } finally {
     document.getElementById('predict-test').disabled = false;
   }
 }
 
-// Rest of the functions remain the same (trainModel, updateMetrics, etc.)
+// Training function (simplified and robust)
 async function trainModel() {
   if (!preprocessor || !trainData) {
     alert('Please load data first');
@@ -261,14 +295,18 @@ async function trainModel() {
   try {
     document.getElementById('train-model').disabled = true;
     const trainLog = document.getElementById('training-log');
-    trainLog.textContent = 'Starting training...\n';
+    trainLog.textContent = '🚀 Starting training...\n';
 
     const hiddenUnits = parseInt(document.getElementById('hidden-units').value);
     const lr = parseFloat(document.getElementById('lr').value);
 
     model = tf.sequential({
       layers: [
-        tf.layers.dense({ units: hiddenUnits, activation: 'relu', inputShape: [preprocessor.featureOrder.length] }),
+        tf.layers.dense({ 
+          units: hiddenUnits, 
+          activation: 'relu', 
+          inputShape: [preprocessor.featureOrder.length] 
+        }),
         tf.layers.dropout({ rate: 0.2 }),
         tf.layers.dense({ units: Math.floor(hiddenUnits / 2), activation: 'relu' }),
         tf.layers.dense({ units: 1, activation: 'sigmoid' })
@@ -286,9 +324,9 @@ async function trainModel() {
     document.getElementById('model-summary').textContent = summary.join('\n');
 
     const { train } = stratifiedSplit(trainData, trainHeaders);
-    const { features, targets } = preprocessor.transform(train);
-    const xs = tf.tensor2d(features);
-    const ys = tf.tensor1d(targets, 'float32');
+    const processed = preprocessor.transform(train);
+    const xs = tf.tensor2d(processed.features);
+    const ys = tf.tensor1d(processed.targets, 'float32');
 
     await model.fit(xs, ys, {
       epochs: 30,
@@ -297,7 +335,8 @@ async function trainModel() {
       validationData: [valXs, valYs],
       callbacks: {
         onEpochEnd: async (epoch, logs) => {
-          trainLog.textContent += `Epoch ${epoch + 1}: loss=${logs.loss?.toFixed(4)}, acc=${logs.acc?.toFixed(4)}\n`;
+          const acc = logs.acc || logs.accuracy || 0;
+          trainLog.textContent += `Epoch ${epoch + 1}: loss=${logs.loss?.toFixed(4)}, acc=${acc.toFixed(4)}\n`;
           await tf.nextFrame();
         }
       }
@@ -306,12 +345,12 @@ async function trainModel() {
     xs.dispose();
     ys.dispose();
     trainLog.textContent += '✅ Training complete!';
-    updateMetrics();
+    if (valXs && valYs) updateMetrics();
     enableButtons();
 
   } catch (err) {
-    alert(`Training error: ${err.message}`);
     console.error('Training error:', err);
+    alert(`Training error: ${err.message}`);
   } finally {
     document.getElementById('train-model').disabled = false;
   }
@@ -325,10 +364,10 @@ async function updateMetrics() {
     const targets = valYs.dataSync();
     const { auc } = computeROC(probs, targets);
     const threshold = parseFloat(document.getElementById('threshold').value);
-    const { precision, recall, f1 } = computeMetrics(probs, targets, threshold);
+    const metrics = computeMetrics(probs, targets, threshold);
 
     document.getElementById('metrics-output').textContent = 
-      `AUC: ${auc.toFixed(4)}\nPrecision: ${precision.toFixed(4)}\nRecall: ${recall.toFixed(4)}\nF1: ${f1.toFixed(4)}`;
+      `AUC: ${auc.toFixed(4)}\nPrecision: ${metrics.precision.toFixed(4)}\nRecall: ${metrics.recall.toFixed(4)}\nF1: ${metrics.f1.toFixed(4)}`;
 
   } catch (err) {
     console.error('Metrics error:', err);
@@ -342,24 +381,26 @@ function reset() {
   
   preprocessor = null;
   trainData = null;
-  testData = null;  // ✅ This was the issue!
+  testData = null;
   trainHeaders = null;
   testHeaders = null;
 
   // Clear UI
-  document.getElementById('eda-output').textContent = '';
-  document.getElementById('preview-table').innerHTML = '';
-  document.getElementById('feature-dim').textContent = '';
-  document.getElementById('model-summary').textContent = '';
-  document.getElementById('training-log').textContent = '';
-  document.getElementById('metrics-output').textContent = '';
-  document.getElementById('confusion-output').textContent = '';
+  ['eda-output', 'preview-table', 'feature-dim', 'model-summary', 
+   'training-log', 'metrics-output', 'confusion-output'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (id === 'preview-table') el.innerHTML = '';
+      else el.textContent = '';
+    }
+  });
+  
   document.getElementById('download-submission').style.display = 'none';
   document.getElementById('download-probabilities').style.display = 'none';
   
-  // Clear files
   ['train-file', 'test-file', 'model-json', 'model-bin', 'prep-json'].forEach(id => {
-    document.getElementById(id).value = '';
+    const el = document.getElementById(id);
+    if (el) el.value = '';
   });
   
   enableButtons();
@@ -368,18 +409,17 @@ function reset() {
 function enableButtons() {
   document.getElementById('load-data').disabled = false;
   document.getElementById('train-model').disabled = !trainData || !preprocessor;
-  document.getElementById('predict-test').disabled = !model || !testData || testData.length === 0;
+  document.getElementById('predict-test').disabled = !model || !testData || !Array.isArray(testData) || testData.length === 0;
   document.getElementById('save-model').disabled = !model;
   document.getElementById('save-prep').disabled = !preprocessor;
   document.getElementById('load-model').disabled = false;
 }
 
-// Placeholder functions (keep existing ones from data-loader.js)
 async function saveModel() {
   if (!model) return alert('No model to save');
   try {
     await model.save('downloads://loan-approval-model');
-    alert('Model saved!');
+    alert('✅ Model saved!');
   } catch (err) {
     alert('Save failed: ' + err.message);
   }
@@ -387,15 +427,21 @@ async function saveModel() {
 
 function savePreprocessor() {
   if (!preprocessor) return alert('No preprocessor to save');
-  const json = JSON.stringify(preprocessor.toJSON(), null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'preprocessor.json';
-  a.click();
-  URL.revokeObjectURL(url);
-  alert('Preprocessor saved!');
+  try {
+    const json = JSON.stringify(preprocessor.toJSON(), null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'preprocessor.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert('✅ Preprocessor saved!');
+  } catch (err) {
+    alert('Save failed: ' + err.message);
+  }
 }
 
 async function loadModel() {
