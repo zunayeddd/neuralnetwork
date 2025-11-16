@@ -189,32 +189,17 @@
             box-shadow: 0 4px 15px rgba(66, 165, 245, 0.3);
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             box-shadow: 0 6px 25px rgba(66, 165, 245, 0.5);
             transform: translateY(-2px);
         }
 
-        .btn-primary:active {
+        .btn-primary:active:not(:disabled) {
             transform: translateY(0);
         }
 
-        .btn-secondary {
-            background: rgba(66, 165, 245, 0.1);
-            color: var(--primary);
-            border: 1px solid var(--primary);
-        }
-
-        .btn-secondary:hover {
-            background: rgba(66, 165, 245, 0.2);
-        }
-
-        .btn-small {
-            padding: 0.5rem 1rem;
-            font-size: 0.875rem;
-        }
-
-        .btn-disabled {
-            opacity: 0.5;
+        .btn-primary:disabled {
+            opacity: 0.6;
             cursor: not-allowed;
         }
 
@@ -268,46 +253,38 @@
             }
         }
 
-        /* Metrics */
-        .metrics {
+        /* Stats */
+        .stats-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
             margin-bottom: 1.5rem;
         }
 
-        .metric {
+        @media (max-width: 640px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .stat {
             background: rgba(66, 165, 245, 0.05);
-            border: 1px solid rgba(66, 165, 245, 0.2);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 1rem;
-            text-align: center;
         }
 
-        .metric-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 0.25rem;
-            animation: countUp 1s ease-out;
-        }
-
-        @keyframes countUp {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .metric-label {
+        .stat-label {
             font-size: 0.75rem;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
         }
 
         /* Results */
@@ -337,12 +314,6 @@
             border-radius: 20px;
             font-size: 0.875rem;
             font-weight: 600;
-        }
-
-        .result-badge.positive {
-            background: rgba(102, 187, 106, 0.2);
-            color: var(--accent);
-            border: 1px solid var(--accent);
         }
 
         .result-badge.negative {
@@ -389,14 +360,6 @@
             }
         }
 
-        .result-message {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border);
-        }
-
         /* Charts */
         .chart-container {
             position: relative;
@@ -409,40 +372,6 @@
             font-weight: 600;
             margin-bottom: 1rem;
             color: var(--text-secondary);
-        }
-
-        /* Stats */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        @media (max-width: 640px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .stat {
-            background: rgba(66, 165, 245, 0.05);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
         }
 
         /* Loading */
@@ -480,25 +409,6 @@
             }
         }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--background);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--primary);
-        }
-
         /* Feature Analysis */
         .feature-list {
             list-style: none;
@@ -530,6 +440,12 @@
 
         .protective-factor {
             color: var(--accent);
+        }
+
+        .progress-text {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
         }
     </style>
 </head>
@@ -578,6 +494,7 @@
                     </div>
                     <button class="btn-primary" id="trainBtn" onclick="trainModels()" disabled>Train Models</button>
                     <div id="trainingStatus" style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-secondary);"></div>
+                    <div id="trainingProgress" class="progress-text hidden"></div>
 
                     <!-- Model Metrics -->
                     <div id="metricsContainer" class="hidden" style="margin-top: 1.5rem;">
@@ -737,7 +654,6 @@
         // Global variables
         let csvData = [];
         let models = { logistic: null, neuralNet: null };
-        let scaler = null;
         let classStats = null;
         let logisticWeights = null;
         let charts = { class: null, feature: null };
@@ -896,28 +812,7 @@
             });
         }
 
-        // Normalize data
-        function normalizeData(data) {
-            const normalized = {};
-            const mins = {}, maxs = {}, ranges = {};
-
-            // Calculate min/max for each feature
-            featureNames.forEach(feature => {
-                const values = csvData.map(row => parseFloat(row[feature])).filter(v => !isNaN(v));
-                mins[feature] = Math.min(...values);
-                maxs[feature] = Math.max(...values);
-                ranges[feature] = maxs[feature] - mins[feature];
-            });
-
-            featureNames.forEach(feature => {
-                const value = parseFloat(data[feature]);
-                normalized[feature] = ranges[feature] === 0 ? 0 : (value - mins[feature]) / ranges[feature];
-            });
-
-            return { normalized, mins, maxs, ranges };
-        }
-
-        // Train Models
+        // Train Models - FIXED VERSION
         async function trainModels() {
             if (csvData.length === 0) {
                 alert('Please upload a CSV file first');
@@ -926,13 +821,21 @@
 
             document.getElementById('trainBtn').disabled = true;
             document.getElementById('trainingStatus').innerHTML = '<div class="loading" style="display: inline-block;"></div> Training models...';
+            document.getElementById('trainingProgress').classList.remove('hidden');
 
             try {
+                // IMPORTANT FIX: Sample data to 5000 rows for faster training
+                const sampleSize = Math.min(5000, csvData.length);
+                const sampledData = csvData.slice(0, sampleSize);
+                
                 // Prepare data
-                const features = csvData.map(row => 
-                    featureNames.map(f => parseFloat(row[f]))
+                const features = sampledData.map(row => 
+                    featureNames.map(f => {
+                        const val = parseFloat(row[f]);
+                        return isNaN(val) ? 0 : val;
+                    })
                 );
-                const labels = csvData.map(row => parseInt(row.diabetes));
+                const labels = sampledData.map(row => parseInt(row.diabetes) || 0);
 
                 // Split data (80/20)
                 const splitIdx = Math.floor(features.length * 0.8);
@@ -941,16 +844,28 @@
                 const xTest = tf.tensor2d(features.slice(splitIdx));
                 const yTest = tf.tensor2d(labels.slice(splitIdx), [labels.length - splitIdx, 1]);
 
-                // Train Logistic Regression
+                // Update progress
+                document.getElementById('trainingProgress').innerHTML = '📊 Training Logistic Regression...';
+
+                // Train Logistic Regression - REDUCED EPOCHS
                 const logModel = tf.sequential({
                     layers: [
                         tf.layers.dense({ units: 1, activation: 'sigmoid', inputShape: [8] })
                     ]
                 });
                 logModel.compile({ optimizer: 'adam', loss: 'binaryCrossentropy', metrics: ['accuracy'] });
-                await logModel.fit(xTrain, yTrain, { epochs: 50, verbose: 0 });
+                
+                // IMPORTANT: Reduced from 50 to 20 epochs
+                await logModel.fit(xTrain, yTrain, { 
+                    epochs: 20, 
+                    verbose: 0,
+                    batchSize: 32
+                });
 
-                // Train Neural Network
+                // Update progress
+                document.getElementById('trainingProgress').innerHTML = '🧠 Training Neural Network...';
+
+                // Train Neural Network - REDUCED EPOCHS
                 const nnModel = tf.sequential({
                     layers: [
                         tf.layers.dense({ units: 16, activation: 'relu', inputShape: [8] }),
@@ -961,7 +876,16 @@
                     ]
                 });
                 nnModel.compile({ optimizer: 'adam', loss: 'binaryCrossentropy', metrics: ['accuracy'] });
-                await nnModel.fit(xTrain, yTrain, { epochs: 50, verbose: 0 });
+                
+                // IMPORTANT: Reduced from 50 to 20 epochs
+                await nnModel.fit(xTrain, yTrain, { 
+                    epochs: 20, 
+                    verbose: 0,
+                    batchSize: 32
+                });
+
+                // Update progress
+                document.getElementById('trainingProgress').innerHTML = '📈 Evaluating models...';
 
                 // Evaluate models
                 const logEval = logModel.evaluate(xTest, yTest);
@@ -988,6 +912,7 @@
                 document.getElementById('featureChartContainer').classList.remove('hidden');
                 document.getElementById('predictBtn').disabled = false;
                 document.getElementById('trainingStatus').innerHTML = '<strong style="color: var(--accent);">✓ Models trained successfully!</strong>';
+                document.getElementById('trainingProgress').classList.add('hidden');
 
                 // Draw feature chart
                 drawFeatureChart();
@@ -1004,9 +929,11 @@
                 weights.dispose();
 
             } catch (error) {
+                console.error('Training error:', error);
                 alert('Error training models: ' + error.message);
                 document.getElementById('trainBtn').disabled = false;
-                document.getElementById('trainingStatus').innerHTML = '';
+                document.getElementById('trainingStatus').innerHTML = '<strong style="color: var(--danger);">✗ Training failed</strong>';
+                document.getElementById('trainingProgress').classList.add('hidden');
             }
         }
 
