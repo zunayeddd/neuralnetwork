@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Diabetes Prediction – Browser ML</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.21.0/dist/tf.min.js"></script>
+    <!-- PapaParse for CSV -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <h1>Diabetes Prediction – Browser ML</h1>
+
+    <!-- 1. Dataset upload and training -->
+    <section class="card">
+        <h2>Step 1: Upload dataset and train models</h2>
+        <p class="hint">
+            Use the diabetes CSV with columns:
+            gender, age, hypertension, heart_disease, smoking_history, bmi, HbA1c_level, blood_glucose_level, diabetes
+        </p>
+        <input type="file" id="datasetInput" accept=".csv">
+        <button id="trainButton" disabled>Train models</button>
+
+        <div id="eda"></div>
+        <div id="metrics"></div>
+
+        <div class="charts">
+            <div>
+                <h3>Class distribution</h3>
+                <canvas id="classChart" height="180"></canvas>
+            </div>
+            <div>
+                <h3>Feature importance (logistic regression)</h3>
+                <canvas id="importanceChart" height="180"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. User prediction -->
+    <section class="card">
+        <h2>Step 2: Check your diabetes risk</h2>
+        <p class="hint">This uses the neural network trained above. Train first.</p>
+
+        <form id="predictForm">
+            <div class="grid">
+                <div class="field">
+                    <label for="gender">Gender</label>
+                    <select id="gender" required>
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="age">Age (years)</label>
+                    <input type="number" id="age" step="0.1" required>
+                </div>
+
+                <div class="field">
+                    <label for="hypertension">Hypertension</label>
+                    <select id="hypertension">
+                        <option value="0">No</option>
+                        <option value="1">Yes</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="heart_disease">Heart disease</label>
+                    <select id="heart_disease">
+                        <option value="0">No</option>
+                        <option value="1">Yes</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="smoking_history">Smoking history</label>
+                    <select id="smoking_history">
+                        <option value="never">Never</option>
+                        <option value="former">Former</option>
+                        <option value="current">Current</option>
+                        <option value="not current">Not current</option>
+                        <option value="ever">Ever</option>
+                        <option value="No Info">No Info</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="bmi">BMI</label>
+                    <input type="number" id="bmi" step="0.1" required>
+                </div>
+
+                <div class="field">
+                    <label for="hba1c">HbA1c level</label>
+                    <input type="number" id="hba1c" step="0.1" required>
+                </div>
+
+                <div class="field">
+                    <label for="glucose">Blood glucose level</label>
+                    <input type="number" id="glucose" required>
+                </div>
+            </div>
+
+            <button type="submit" id="predictButton" disabled>Predict</button>
+        </form>
+
+        <div id="predictionOutput"></div>
+    </section>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
