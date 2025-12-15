@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live AI Training - Diabetes Risk Predictor</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <span>🚀</span>
+                <span>LIVE AI TRAINING</span>
+            </div>
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span>Live Dashboard</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Title -->
+        <div class="title-section">
+            <h1 class="main-title">Live AI Training Visualization</h1>
+            <p class="subtitle">Real-Time Diabetes Risk Prediction Model Training</p>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Left Column: Upload & Control -->
+            <div class="column">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">📥</span>
+                        <div>
+                            <div class="card-title">Step 1: Upload Dataset</div>
+                            <div class="card-subtitle">Upload your diabetes CSV dataset</div>
+                        </div>
+                    </div>
+
+                    <div class="upload-section">
+                        <input type="file" id="csvFile" accept=".csv">
+                        <button class="btn-primary" onclick="handleFileUpload()">Load Dataset</button>
+                        <div id="uploadStatus" class="status-message hidden"></div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 2rem;">
+                    <div class="card-header">
+                        <span class="card-icon">🤖</span>
+                        <div>
+                            <div class="card-title">Step 2: Train Models</div>
+                            <div class="card-subtitle">Watch the training process in real-time</div>
+                        </div>
+                    </div>
+
+                    <button class="btn-primary" id="trainBtn" onclick="trainModels()" disabled>Start Training</button>
+                    <div id="trainingStatus" class="status-message hidden"></div>
+
+                    <!-- Live Training Visualization -->
+                    <div id="liveTrainingContainer" class="live-training-container">
+                        <!-- Logistic Regression Monitor -->
+                        <div class="model-monitor logistic">
+                            <div class="model-name">
+                                <span class="status-indicator training" id="logStatus"></span>
+                                📈 Logistic Regression
+                            </div>
+
+                            <div class="metrics-grid">
+                                <div class="metric-box">
+                                    <div class="metric-label">Loss</div>
+                                    <div class="metric-value" id="logLoss">0.0000</div>
+                                </div>
+                                <div class="metric-box">
+                                    <div class="metric-label">Accuracy</div>
+                                    <div class="metric-value" id="logAccuracy">0%</div>
+                                </div>
+                            </div>
+
+                            <div class="chart-container">
+                                <canvas id="logChart"></canvas>
+                            </div>
+
+                            <div class="epoch-info">
+                                <div class="epoch-row">
+                                    <span class="epoch-label">Epoch</span>
+                                    <span class="epoch-value" id="logEpoch">0/20</span>
+                                </div>
+                                <div class="epoch-row">
+                                    <span class="epoch-label">Status</span>
+                                    <span class="epoch-value" id="logEpochStatus">Waiting...</span>
+                                </div>
+                            </div>
+
+                            <div class="progress-section">
+                                <div class="progress-label">
+                                    <span>Training Progress</span>
+                                    <span id="logProgress">0%</span>
+                                </div>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar-fill" id="logProgressBar"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Neural Network Monitor -->
+                        <div class="model-monitor neural">
+                            <div class="model-name">
+                                <span class="status-indicator training" id="nnStatus"></span>
+                                🧠 Neural Network
+                            </div>
+
+                            <div class="metrics-grid">
+                                <div class="metric-box">
+                                    <div class="metric-label">Loss</div>
+                                    <div class="metric-value" id="nnLoss">0.0000</div>
+                                </div>
+                                <div class="metric-box">
+                                    <div class="metric-label">Accuracy</div>
+                                    <div class="metric-value" id="nnAccuracy">0%</div>
+                                </div>
+                            </div>
+
+                            <div class="chart-container">
+                                <canvas id="nnChart"></canvas>
+                            </div>
+
+                            <div class="epoch-info">
+                                <div class="epoch-row">
+                                    <span class="epoch-label">Epoch</span>
+                                    <span class="epoch-value" id="nnEpoch">0/20</span>
+                                </div>
+                                <div class="epoch-row">
+                                    <span class="epoch-label">Status</span>
+                                    <span class="epoch-value" id="nnEpochStatus">Waiting...</span>
+                                </div>
+                            </div>
+
+                            <div class="progress-section">
+                                <div class="progress-label">
+                                    <span>Training Progress</span>
+                                    <span id="nnProgress">0%</span>
+                                </div>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar-fill" id="nnProgressBar"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Final Results -->
+                    <div id="resultsContainer" class="results-container">
+                        <div class="result-card">
+                            <div class="result-label">Logistic Accuracy</div>
+                            <div class="result-value" id="logFinalAccuracy">0%</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Logistic Loss</div>
+                            <div class="result-value" id="logFinalLoss">0.0000</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Neural Accuracy</div>
+                            <div class="result-value" id="nnFinalAccuracy">0%</div>
+                        </div>
+                        <div class="result-card">
+                            <div class="result-label">Neural Loss</div>
+                            <div class="result-value" id="nnFinalLoss">0.0000</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Prediction Form -->
+            <div class="column">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">🔍</span>
+                        <div>
+                            <div class="card-title">Step 3: Make Prediction</div>
+                            <div class="card-subtitle">Enter your health information</div>
+                        </div>
+                    </div>
+
+                    <form id="predictionForm" onsubmit="handlePredict(event)">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Gender</label>
+                                <select id="gender" required>
+                                    <option value="Female">Female</option>
+                                    <option value="Male">Male</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Age</label>
+                                <input type="number" id="age" placeholder="Age" min="0" max="120" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Hypertension</label>
+                                <select id="hypertension" required>
+                                    <option value="No">No</option>
+                                    <option value="Yes">Yes</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Heart Disease</label>
+                                <select id="heartDisease" required>
+                                    <option value="No">No</option>
+                                    <option value="Yes">Yes</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Smoking History</label>
+                            <select id="smokingHistory" required>
+                                <option value="Never">Never</option>
+                                <option value="No Info">No Info</option>
+                                <option value="Current">Current</option>
+                                <option value="Former">Former</option>
+                                <option value="Ever">Ever</option>
+                                <option value="Not Current">Not Current</option>
+                            </select>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>BMI</label>
+                                <input type="number" id="bmi" placeholder="BMI" step="0.1" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label>HbA1c Level</label>
+                                <input type="number" id="hba1c" placeholder="HbA1c" step="0.1" min="0" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Blood Glucose</label>
+                            <input type="number" id="bloodGlucose" placeholder="Blood Glucose" step="0.1" min="0" required>
+                        </div>
+
+                        <button type="submit" class="btn-primary" id="predictBtn" disabled>Predict Risk</button>
+                    </form>
+
+                    <!-- Prediction Result -->
+                    <div id="resultContainer" class="result-container hidden">
+                        <div class="result-header">
+                            <div class="result-title">Your Risk Assessment</div>
+                            <div class="risk-badge" id="resultBadge"></div>
+                        </div>
+
+                        <div class="risk-probability" id="riskProbability">0%</div>
+                        <div class="progress-bar-result">
+                            <div class="progress-fill-result" id="progressFill"></div>
+                        </div>
+
+                        <div id="recommendationsContainer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
