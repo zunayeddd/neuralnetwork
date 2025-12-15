@@ -7,450 +7,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --primary: #42a5f5;
-            --accent: #66bb6a;
-            --danger: #ef5350;
-            --warning: #ffa726;
-            --background: #0f1419;
-            --card: #1a1d23;
-            --border: #2a2d33;
-            --text-primary: #e0e0e0;
-            --text-secondary: #a3a3a3;
-            --text-muted: #757575;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, var(--background) 0%, #1a1d28 100%);
-            color: var(--text-primary);
-            line-height: 1.6;
-            min-height: 100vh;
-        }
-
-        /* Header */
-        header {
-            background: rgba(26, 29, 35, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--border);
-            padding: 1.5rem 2rem;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        .header-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .logo-icon {
-            font-size: 1.75rem;
-        }
-
-        .status-badge {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: rgba(102, 187, 106, 0.1);
-            border: 1px solid var(--accent);
-            border-radius: 20px;
-            font-size: 0.875rem;
-            color: var(--accent);
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--accent);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        /* Main Container */
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-
-        @media (max-width: 1024px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Cards */
-        .card {
-            background: rgba(26, 29, 35, 0.6);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 2rem;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-            animation: slideUp 0.6s ease-out;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .card:hover {
-            border-color: var(--primary);
-            box-shadow: 0 0 30px rgba(66, 165, 245, 0.2);
-            transform: translateY(-2px);
-        }
-
-        .card-header {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .card-icon {
-            font-size: 1.5rem;
-            color: var(--primary);
-        }
-
-        .card-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .card-description {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            margin-top: 0.5rem;
-        }
-
-        /* Buttons */
-        button {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary) 0%, #1e88e5 100%);
-            color: white;
-            width: 100%;
-            justify-content: center;
-            box-shadow: 0 4px 15px rgba(66, 165, 245, 0.3);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            box-shadow: 0 6px 25px rgba(66, 165, 245, 0.5);
-            transform: translateY(-2px);
-        }
-
-        .btn-primary:active:not(:disabled) {
-            transform: translateY(0);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        /* Form Elements */
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        input, select {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 1rem;
-            transition: all 0.3s ease;
-        }
-
-        input:focus, select:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 15px rgba(66, 165, 245, 0.2);
-            background: rgba(66, 165, 245, 0.05);
-        }
-
-        input::placeholder {
-            color: var(--text-muted);
-        }
-
-        /* Two Column Form */
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-
-        @media (max-width: 640px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* Stats */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-        }
-
-        @media (max-width: 640px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .stat {
-            background: rgba(66, 165, 245, 0.05);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem;
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        /* Results */
-        .result-card {
-            background: linear-gradient(135deg, rgba(102, 187, 106, 0.1) 0%, rgba(66, 165, 245, 0.1) 100%);
-            border: 2px solid var(--accent);
-            border-radius: 12px;
-            padding: 2rem;
-            margin-top: 1.5rem;
-            animation: slideUp 0.6s ease-out;
-        }
-
-        .result-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .result-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-        }
-
-        .result-badge {
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-
-        .result-badge.negative {
-            background: rgba(102, 187, 106, 0.2);
-            color: var(--accent);
-            border: 1px solid var(--accent);
-        }
-
-        .result-badge.high {
-            background: rgba(239, 83, 80, 0.2);
-            color: var(--danger);
-            border: 1px solid var(--danger);
-        }
-
-        .result-probability {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 1rem;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 1rem;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
-            border-radius: 4px;
-            animation: fillProgress 1s ease-out;
-        }
-
-        @keyframes fillProgress {
-            from {
-                width: 0;
-            }
-            to {
-                width: var(--progress-width);
-            }
-        }
-
-        /* Charts */
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin-bottom: 2rem;
-        }
-
-        .chart-title {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            color: var(--text-secondary);
-        }
-
-        /* Loading */
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(66, 165, 245, 0.3);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Hidden */
-        .hidden {
-            display: none !important;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .container {
-                padding: 1rem;
-            }
-
-            .card {
-                padding: 1.5rem;
-            }
-
-            .grid {
-                gap: 1rem;
-            }
-        }
-
-        /* Feature Analysis */
-        .feature-list {
-            list-style: none;
-        }
-
-        .feature-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem;
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 6px;
-            margin-bottom: 0.5rem;
-            font-size: 0.875rem;
-        }
-
-        .feature-name {
-            color: var(--text-secondary);
-        }
-
-        .feature-value {
-            color: var(--primary);
-            font-weight: 600;
-        }
-
-        .risk-factor {
-            color: var(--danger);
-        }
-
-        .protective-factor {
-            color: var(--accent);
-        }
-
-        .progress-text {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            margin-top: 0.5rem;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Header -->
     <header>
         <div class="header-content">
             <div class="logo">
@@ -464,12 +23,9 @@
         </div>
     </header>
 
-    <!-- Main Container -->
     <div class="container">
         <div class="grid">
-            <!-- Left Column -->
             <div>
-                <!-- Step 1: Upload Dataset -->
                 <div class="card">
                     <div class="card-header">
                         <span class="card-icon">📥</span>
@@ -478,12 +34,11 @@
                             <div class="card-description">Upload your diabetes CSV dataset to train the AI models</div>
                         </div>
                     </div>
-                    <input type="file" id="csvFile" accept=".csv" style="margin-bottom: 1rem;">
-                    <button class="btn-primary" onclick="handleFileUpload()">Choose CSV File</button>
-                    <div id="uploadStatus" style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-secondary);"></div>
+                    <input type="file" id="csvFile" accept=".csv">
+                    <button class="btn-primary" onclick="handleFileUpload()">Upload CSV File</button>
+                    <div id="uploadStatus" class="status-text"></div>
                 </div>
 
-                <!-- Step 2: Train Models -->
                 <div class="card" style="margin-top: 2rem;">
                     <div class="card-header">
                         <span class="card-icon">🤖</span>
@@ -493,72 +48,38 @@
                         </div>
                     </div>
                     <button class="btn-primary" id="trainBtn" onclick="trainModels()" disabled>Train Models</button>
-                    <div id="trainingStatus" style="margin-top: 1rem; font-size: 0.875rem; color: var(--text-secondary);"></div>
+                    <div id="trainingStatus" class="status-text"></div>
                     <div id="trainingProgress" class="progress-text hidden"></div>
 
-                    <!-- Model Metrics -->
                     <div id="metricsContainer" class="hidden" style="margin-top: 1.5rem;">
                         <div class="stats-grid">
                             <div class="stat">
-                                <div class="stat-label">Logistic Regression</div>
-                                <div class="stat-value" id="logAccuracy">0%</div>
-                                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Accuracy</div>
+                                <div class="stat-label">Logistic Accuracy</div>
+                                <div class="stat-value" id="logAccuracy">--</div>
                             </div>
                             <div class="stat">
-                                <div class="stat-label">Loss</div>
-                                <div class="stat-value" id="logLoss">0</div>
+                                <div class="stat-label">Logistic Loss</div>
+                                <div class="stat-value" id="logLoss">--</div>
                             </div>
                             <div class="stat">
-                                <div class="stat-label">Neural Network</div>
-                                <div class="stat-value" id="nnAccuracy">0%</div>
-                                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Accuracy</div>
+                                <div class="stat-label">Neural Net Accuracy</div>
+                                <div class="stat-value" id="nnAccuracy">--</div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Data Visualization -->
-                <div class="card" id="chartsContainer" class="hidden" style="margin-top: 2rem;">
-                    <div class="card-header">
-                        <span class="card-icon">📊</span>
-                        <div>
-                            <div class="card-title">Data Visualization</div>
-                            <div class="card-description">Class distribution and feature analysis</div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <div class="chart-title">Class Distribution</div>
-                        <div class="chart-container">
-                            <canvas id="classChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div id="featureChartContainer" class="hidden">
-                        <div class="chart-title">Feature Importance (Logistic Regression)</div>
-                        <div class="chart-container">
-                            <canvas id="featureChart"></canvas>
-                        </div>
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                            Blue bars increase diabetes risk, green bars are protective factors
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column -->
             <div>
-                <!-- Step 3: Prediction Form -->
                 <div class="card">
                     <div class="card-header">
-                        <span class="card-icon">🔍</span>
+                        <span class="card-icon">👤</span>
                         <div>
-                            <div class="card-title">Step 3: Check Your Risk</div>
-                            <div class="card-description">Enter your health information to predict diabetes risk</div>
+                            <div class="card-title">Step 3: Predict Risk</div>
+                            <div class="card-description">Enter patient details for diabetes risk prediction</div>
                         </div>
                     </div>
-
-                    <form id="predictionForm" onsubmit="handlePredict(event)">
+                    <form id="predictForm" onsubmit="handlePredict(event)">
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="gender">Gender</label>
@@ -568,8 +89,8 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="age">Age (years)</label>
-                                <input type="number" id="age" placeholder="Enter age" min="0" max="120" required>
+                                <label for="age">Age</label>
+                                <input type="number" id="age" placeholder="e.g. 55" min="0" max="120" required>
                             </div>
                         </div>
 
@@ -593,438 +114,82 @@
                         <div class="form-group">
                             <label for="smokingHistory">Smoking History</label>
                             <select id="smokingHistory" required>
-                                <option value="Never">Never</option>
-                                <option value="No Info">No Info</option>
-                                <option value="Current">Current</option>
-                                <option value="Former">Former</option>
-                                <option value="Ever">Ever</option>
-                                <option value="Not Current">Not Current</option>
+                                <option>Never</option>
+                                <option>No Info</option>
+                                <option>Current</option>
+                                <option>Former</option>
+                                <option>Ever</option>
+                                <option>Not Current</option>
                             </select>
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="bmi">BMI</label>
-                                <input type="number" id="bmi" placeholder="Enter BMI" step="0.1" min="0" required>
+                                <input type="number" step="0.1" id="bmi" placeholder="e.g. 27.5" required>
                             </div>
                             <div class="form-group">
-                                <label for="hba1c">HbA1c Level</label>
-                                <input type="number" id="hba1c" placeholder="Enter HbA1c" step="0.1" min="0" required>
+                                <label for="hba1c">HbA1c Level (%)</label>
+                                <input type="number" step="0.1" id="hba1c" placeholder="e.g. 6.2" required>
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label for="bloodGlucose">Blood Glucose Level</label>
-                            <input type="number" id="bloodGlucose" placeholder="Enter blood glucose" step="0.1" min="0" required>
+                            <label for="bloodGlucose">Blood Glucose Level (mg/dL)</label>
+                            <input type="number" id="bloodGlucose" placeholder="e.g. 140" required>
                         </div>
 
-                        <button type="submit" class="btn-primary" id="predictBtn" disabled>Predict Risk</button>
+                        <button type="submit" class="btn-primary" id="predictBtn" disabled>Predict Diabetes Risk</button>
                     </form>
+                </div>
 
-                    <!-- Prediction Result -->
-                    <div id="resultContainer" class="hidden">
-                        <div class="result-card">
-                            <div class="result-header">
-                                <div class="result-title">Prediction Result</div>
-                                <div class="result-badge" id="resultBadge"></div>
-                            </div>
-                            <div class="result-probability">
-                                Risk Probability: <span id="riskProbability">0%</span>
-                            </div>
-                            <div class="progress-bar">
-                                <div class="progress-fill" id="progressFill" style="--progress-width: 0%;"></div>
-                            </div>
-                            <div style="font-size: 0.875rem; color: var(--text-secondary);">
-                                ✓ Your predicted diabetes risk is <span id="riskLevel">low</span> based on this model. This does not replace medical tests.
-                            </div>
+                <div id="resultContainer" class="result-card hidden">
+                    <div class="result-header">
+                        <h3 class="result-title">Prediction Result</h3>
+                        <div id="resultBadge" class="result-badge negative">LOW</div>
+                    </div>
+                    <div class="result-probability">
+                        Risk Probability: <span id="riskProbability">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill" style="--progress-width: 0%;"></div>
+                    </div>
+                    <p><strong>Risk Level:</strong> <span id="riskLevel">low</span></p>
+                    <p class="result-message"><em>Note: This is an AI-based prediction only. Always consult a healthcare professional.</em></p>
 
-                            <!-- Risk Factors -->
-                            <div id="riskFactorsContainer" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
-                                <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-secondary);">Risk Factors Analysis</div>
-                                <ul class="feature-list" id="riskFactorsList"></ul>
-                            </div>
-                        </div>
+                    <div style="margin-top: 1.5rem;">
+                        <h4 class="chart-title">Key Contributing Factors</h4>
+                        <ul id="riskFactorsList" class="feature-list"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="chartsContainer" class="hidden" style="margin-top: 3rem;">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">📊</span>
+                        <h3 class="card-title">Dataset Class Distribution</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="classChart"></canvas>
+                    </div>
+                </div>
+
+                <div id="featureChartContainer" class="card hidden">
+                    <div class="card-header">
+                        <span class="card-icon">⚖️</span>
+                        <h3 class="card-title">Feature Importance (Logistic Model)</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="featureChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Global variables
-        let csvData = [];
-        let models = { logistic: null, neuralNet: null };
-        let classStats = null;
-        let logisticWeights = null;
-        let charts = { class: null, feature: null };
-
-        const featureNames = ['gender', 'age', 'hypertension', 'heart_disease', 'smoking_history', 'bmi', 'HbA1c_level', 'blood_glucose_level'];
-        const smokingMap = { 'Never': 0, 'No Info': 1, 'Current': 2, 'Former': 3, 'Ever': 4, 'Not Current': 5 };
-
-        // Handle CSV File Upload
-        function handleFileUpload() {
-            const fileInput = document.getElementById('csvFile');
-            const file = fileInput.files[0];
-            
-            if (!file) {
-                alert('Please select a CSV file');
-                return;
-            }
-
-            Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                complete: (results) => {
-                    csvData = results.data.filter(row => Object.values(row).some(val => val));
-                    
-                    if (csvData.length === 0) {
-                        alert('CSV file is empty');
-                        return;
-                    }
-
-                    // Calculate class statistics
-                    const positives = csvData.filter(row => parseInt(row.diabetes) === 1).length;
-                    const negatives = csvData.length - positives;
-                    classStats = { positives, negatives, total: csvData.length };
-
-                    // Update UI
-                    document.getElementById('uploadStatus').innerHTML = `
-                        <strong>✓ Dataset loaded successfully!</strong><br>
-                        Total Rows: <strong style="color: var(--primary);">${classStats.total}</strong><br>
-                        Diabetes Cases: <strong style="color: var(--accent);">${classStats.positives}</strong><br>
-                        Distribution: ${((negatives/classStats.total)*100).toFixed(1)}% negative, ${((positives/classStats.total)*100).toFixed(1)}% positive
-                    `;
-                    
-                    document.getElementById('trainBtn').disabled = false;
-                    document.getElementById('chartsContainer').classList.remove('hidden');
-                    
-                    // Draw initial chart
-                    drawClassChart();
-                },
-                error: (error) => {
-                    alert('Error parsing CSV: ' + error.message);
-                }
-            });
-        }
-
-        // Draw Class Distribution Chart
-        function drawClassChart() {
-            if (!classStats) return;
-
-            const ctx = document.getElementById('classChart').getContext('2d');
-            
-            if (charts.class) {
-                charts.class.destroy();
-            }
-
-            charts.class = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['No Diabetes (0)', 'Diabetes (1)'],
-                    datasets: [{
-                        label: 'Count',
-                        data: [classStats.negatives, classStats.positives],
-                        backgroundColor: ['rgba(102, 187, 106, 0.6)', 'rgba(66, 165, 245, 0.6)'],
-                        borderColor: ['rgba(102, 187, 106, 1)', 'rgba(66, 165, 245, 1)'],
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(31, 31, 31, 0.95)',
-                            titleColor: '#e0e0e0',
-                            bodyColor: '#e0e0e0',
-                            borderColor: 'rgba(66, 165, 245, 0.5)',
-                            borderWidth: 1,
-                            padding: 12
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#e0e0e0' }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#e0e0e0' }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Draw Feature Importance Chart
-        function drawFeatureChart() {
-            if (!logisticWeights) return;
-
-            const ctx = document.getElementById('featureChart').getContext('2d');
-            
-            if (charts.feature) {
-                charts.feature.destroy();
-            }
-
-            const backgroundColors = logisticWeights.map(w => w >= 0 ? 'rgba(66, 165, 245, 0.6)' : 'rgba(102, 187, 106, 0.6)');
-            const borderColors = logisticWeights.map(w => w >= 0 ? 'rgba(66, 165, 245, 1)' : 'rgba(102, 187, 106, 1)');
-
-            charts.feature = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: featureNames,
-                    datasets: [{
-                        label: 'Weight',
-                        data: logisticWeights,
-                        backgroundColor: backgroundColors,
-                        borderColor: borderColors,
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(31, 31, 31, 0.95)',
-                            titleColor: '#e0e0e0',
-                            bodyColor: '#e0e0e0',
-                            borderColor: 'rgba(66, 165, 245, 0.5)',
-                            borderWidth: 1,
-                            padding: 12
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#e0e0e0' }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#e0e0e0', maxRotation: 45, minRotation: 45, autoSkip: false }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Train Models - FIXED VERSION
-        async function trainModels() {
-            if (csvData.length === 0) {
-                alert('Please upload a CSV file first');
-                return;
-            }
-
-            document.getElementById('trainBtn').disabled = true;
-            document.getElementById('trainingStatus').innerHTML = '<div class="loading" style="display: inline-block;"></div> Training models...';
-            document.getElementById('trainingProgress').classList.remove('hidden');
-
-            try {
-                // IMPORTANT FIX: Sample data to 5000 rows for faster training
-                const sampleSize = Math.min(5000, csvData.length);
-                const sampledData = csvData.slice(0, sampleSize);
-                
-                // Prepare data
-                const features = sampledData.map(row => 
-                    featureNames.map(f => {
-                        const val = parseFloat(row[f]);
-                        return isNaN(val) ? 0 : val;
-                    })
-                );
-                const labels = sampledData.map(row => parseInt(row.diabetes) || 0);
-
-                // Split data (80/20)
-                const splitIdx = Math.floor(features.length * 0.8);
-                const xTrain = tf.tensor2d(features.slice(0, splitIdx));
-                const yTrain = tf.tensor2d(labels.slice(0, splitIdx), [splitIdx, 1]);
-                const xTest = tf.tensor2d(features.slice(splitIdx));
-                const yTest = tf.tensor2d(labels.slice(splitIdx), [labels.length - splitIdx, 1]);
-
-                // Update progress
-                document.getElementById('trainingProgress').innerHTML = '📊 Training Logistic Regression...';
-
-                // Train Logistic Regression - REDUCED EPOCHS
-                const logModel = tf.sequential({
-                    layers: [
-                        tf.layers.dense({ units: 1, activation: 'sigmoid', inputShape: [8] })
-                    ]
-                });
-                logModel.compile({ optimizer: 'adam', loss: 'binaryCrossentropy', metrics: ['accuracy'] });
-                
-                // IMPORTANT: Reduced from 50 to 20 epochs
-                await logModel.fit(xTrain, yTrain, { 
-                    epochs: 20, 
-                    verbose: 0,
-                    batchSize: 32
-                });
-
-                // Update progress
-                document.getElementById('trainingProgress').innerHTML = '🧠 Training Neural Network...';
-
-                // Train Neural Network - REDUCED EPOCHS
-                const nnModel = tf.sequential({
-                    layers: [
-                        tf.layers.dense({ units: 16, activation: 'relu', inputShape: [8] }),
-                        tf.layers.dropout({ rate: 0.2 }),
-                        tf.layers.dense({ units: 8, activation: 'relu' }),
-                        tf.layers.dropout({ rate: 0.2 }),
-                        tf.layers.dense({ units: 1, activation: 'sigmoid' })
-                    ]
-                });
-                nnModel.compile({ optimizer: 'adam', loss: 'binaryCrossentropy', metrics: ['accuracy'] });
-                
-                // IMPORTANT: Reduced from 50 to 20 epochs
-                await nnModel.fit(xTrain, yTrain, { 
-                    epochs: 20, 
-                    verbose: 0,
-                    batchSize: 32
-                });
-
-                // Update progress
-                document.getElementById('trainingProgress').innerHTML = '📈 Evaluating models...';
-
-                // Evaluate models
-                const logEval = logModel.evaluate(xTest, yTest);
-                const nnEval = nnModel.evaluate(xTest, yTest);
-
-                const logLoss = (await logEval[0].data())[0];
-                const logAcc = (await logEval[1].data())[0];
-                const nnLoss = (await nnEval[0].data())[0];
-                const nnAcc = (await nnEval[1].data())[0];
-
-                // Get weights for feature importance
-                const weights = logModel.getWeights()[0];
-                logisticWeights = Array.from(await weights.data());
-
-                // Store models
-                models.logistic = logModel;
-                models.neuralNet = nnModel;
-
-                // Update UI
-                document.getElementById('logAccuracy').textContent = (logAcc * 100).toFixed(2) + '%';
-                document.getElementById('logLoss').textContent = logLoss.toFixed(4);
-                document.getElementById('nnAccuracy').textContent = (nnAcc * 100).toFixed(2) + '%';
-                document.getElementById('metricsContainer').classList.remove('hidden');
-                document.getElementById('featureChartContainer').classList.remove('hidden');
-                document.getElementById('predictBtn').disabled = false;
-                document.getElementById('trainingStatus').innerHTML = '<strong style="color: var(--accent);">✓ Models trained successfully!</strong>';
-                document.getElementById('trainingProgress').classList.add('hidden');
-
-                // Draw feature chart
-                drawFeatureChart();
-
-                // Cleanup
-                xTrain.dispose();
-                yTrain.dispose();
-                xTest.dispose();
-                yTest.dispose();
-                logEval[0].dispose();
-                logEval[1].dispose();
-                nnEval[0].dispose();
-                nnEval[1].dispose();
-                weights.dispose();
-
-            } catch (error) {
-                console.error('Training error:', error);
-                alert('Error training models: ' + error.message);
-                document.getElementById('trainBtn').disabled = false;
-                document.getElementById('trainingStatus').innerHTML = '<strong style="color: var(--danger);">✗ Training failed</strong>';
-                document.getElementById('trainingProgress').classList.add('hidden');
-            }
-        }
-
-        // Handle Prediction
-        function handlePredict(event) {
-            event.preventDefault();
-
-            if (!models.neuralNet) {
-                alert('Please train models first');
-                return;
-            }
-
-            try {
-                // Get form data
-                const input = {
-                    gender: document.getElementById('gender').value === 'Female' ? 0 : 1,
-                    age: parseFloat(document.getElementById('age').value),
-                    hypertension: document.getElementById('hypertension').value === 'Yes' ? 1 : 0,
-                    heart_disease: document.getElementById('heartDisease').value === 'Yes' ? 1 : 0,
-                    smoking_history: smokingMap[document.getElementById('smokingHistory').value],
-                    bmi: parseFloat(document.getElementById('bmi').value),
-                    HbA1c_level: parseFloat(document.getElementById('hba1c').value),
-                    blood_glucose_level: parseFloat(document.getElementById('bloodGlucose').value)
-                };
-
-                // Prepare input tensor
-                const inputArray = featureNames.map(f => input[f]);
-                const inputTensor = tf.tensor2d([inputArray]);
-
-                // Make prediction
-                const prediction = models.neuralNet.predict(inputTensor);
-                const riskProbability = Array.from(prediction.dataSync())[0];
-
-                // Display result
-                displayResult(riskProbability, input);
-
-                // Cleanup
-                inputTensor.dispose();
-                prediction.dispose();
-
-            } catch (error) {
-                alert('Error making prediction: ' + error.message);
-            }
-        }
-
-        // Display Prediction Result
-        function displayResult(probability, input) {
-            const riskLevel = probability > 0.5 ? 'high' : probability > 0.3 ? 'moderate' : 'low';
-            const riskPercentage = (probability * 100).toFixed(2);
-
-            // Update result
-            document.getElementById('riskProbability').textContent = riskPercentage + '%';
-            document.getElementById('progressFill').style.setProperty('--progress-width', riskPercentage + '%');
-            document.getElementById('riskLevel').textContent = riskLevel;
-
-            // Update badge
-            const badge = document.getElementById('resultBadge');
-            badge.textContent = riskLevel.toUpperCase();
-            badge.className = 'result-badge ' + (riskLevel === 'high' ? 'high' : 'negative');
-
-            // Calculate risk factors
-            const riskFactors = [];
-            if (input.HbA1c_level > 6.5) riskFactors.push({ name: 'High HbA1c Level', value: input.HbA1c_level, type: 'risk' });
-            if (input.blood_glucose_level > 125) riskFactors.push({ name: 'High Blood Glucose', value: input.blood_glucose_level, type: 'risk' });
-            if (input.bmi > 30) riskFactors.push({ name: 'Overweight (BMI > 30)', value: input.bmi, type: 'risk' });
-            if (input.hypertension === 1) riskFactors.push({ name: 'Hypertension Present', value: 'Yes', type: 'risk' });
-            if (input.heart_disease === 1) riskFactors.push({ name: 'Heart Disease Present', value: 'Yes', type: 'risk' });
-            if (input.age > 45) riskFactors.push({ name: 'Age > 45 years', value: input.age, type: 'risk' });
-            
-            if (input.bmi < 25) riskFactors.push({ name: 'Healthy BMI', value: input.bmi, type: 'protective' });
-            if (input.HbA1c_level < 5.7) riskFactors.push({ name: 'Normal HbA1c', value: input.HbA1c_level, type: 'protective' });
-            if (input.blood_glucose_level < 100) riskFactors.push({ name: 'Normal Blood Glucose', value: input.blood_glucose_level, type: 'protective' });
-
-            // Display factors
-            const factorsList = document.getElementById('riskFactorsList');
-            factorsList.innerHTML = riskFactors.map(factor => `
-                <li class="feature-item">
-                    <span class="feature-name">${factor.name}</span>
-                    <span class="feature-value ${factor.type === 'risk' ? 'risk-factor' : 'protective-factor'}">
-                        ${typeof factor.value === 'number' ? factor.value.toFixed(2) : factor.value}
-                    </span>
-                </li>
-            `).join('');
-
-            document.getElementById('resultContainer').classList.remove('hidden');
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('Dashboard initialized');
-        });
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
